@@ -1,0 +1,18 @@
+# Ignore vscode settings
+.vscode/
+
+# Ignore binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Ignore go mod cache
+go.sum
+go.mod
+
+# MacOS
+.DS_Store
