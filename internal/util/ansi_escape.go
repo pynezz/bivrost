@@ -65,6 +65,15 @@ func PrintError(msg string) {
 	fmt.Printf("%s[!]%s %s\n", Red, Reset, msg)
 }
 
+// PrintErrorf prints a formatted error message to the console
+func PrintErrorf(format string, a ...interface{}) {
+	fmt.Printf("%s[!]%s %s\n", Red, Reset, fmt.Sprintf(format, a...))
+}
+
+func Errorf(format string, a ...interface{}) error {
+	return fmt.Errorf("%s[!]%s %s", Red, Reset, fmt.Sprintf(format, a...))
+}
+
 // PrintInfo prints an info message to the console
 func PrintInfo(msg string) {
 	fmt.Printf("%s[i]%s %s\n", Cyan, Reset, msg)

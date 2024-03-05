@@ -11,10 +11,17 @@ import (
 	"github.com/gofiber/websocket/v2"
 )
 
+type app struct {
+	*fiber.App
+	fiber.Route
+}
+
 // NewServer initializes a new API server with the provided configuration.
 func NewServer(cfg *config.Config) *fiber.App {
 	app := fiber.New(fiber.Config{
 		// Fiber configuration options here
+		ReadTimeout:  cfg.ReadTimeout,
+		WriteTimeout: cfg.WriteTimeout,
 	})
 
 	// Middleware
@@ -32,6 +39,10 @@ func setupRoutes(app *fiber.App, cfg *config.Config) {
 
 	// WebSocket route
 	app.Get("/ws", websocket.New(wsHandler))
+
+	// Threat Intel API routes
+	// app.Get("/api/v1/threats", getThreatsHandler)
+
 }
 
 // indexHandler handles the root path.

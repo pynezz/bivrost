@@ -72,6 +72,57 @@ This will have to be revised as the project progresses.
 }
 ```
 
+We might need to evaluate if YAML simply is better for our purpose, considering the config file will be used by users that might find this format more intuitive.
+
+```yaml
+# YAML also supports comments, which means we can guide the user through the configuration file.
+sources:
+  - name: siem logs
+    type: directory
+    location: /var/log/siem
+    format: json
+    tags:
+      - siem
+      - logs
+# Here ends the first source
+# Here starts a new source.
+  - name: syslog    # Arbitrary name of the source
+    type: service   # Type of the source
+    location: ' '   # Location of the source(such as path, uri, rpc, and ipc)
+    format: json    # Format bivfrost should expect
+    tags:           # Tags to be used for filtering
+      - syslog      # Tag for filtering
+      - logs        # Tag for filtering
+
+  - name: threat intel
+    type: module
+    location: /path/or/uri/to/module/output
+    format: json
+    tags:
+      - intel
+      - module
+  - name: thevalve
+    type: module
+    location: ' '
+    format: raw
+    tags:
+      - credentials
+      - module
+  - name: <user-defined-name>
+    type: <module/logtype/directory/service>
+    location: ' '
+    format: <json, raw, ascii>
+    tags:
+        - <descriptive tag>
+        - ...no tag limit
+
+network:
+  - read_timeout: 10  # time in seconds
+  - write_timeout: 10 # time in seconds
+
+# Here we can add more keys and values as we see fit.
+```
+
 ## Usage
 
 Bivrost is designed to be easy to use and to require minimal configuration. It is designed to be self-contained and to require no dependencies.
