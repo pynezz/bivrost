@@ -121,6 +121,7 @@ network:
   - write_timeout: 10 # time in seconds
 
 # Here we can add more keys and values as we see fit.
+
 ```
 
 ## Usage
@@ -133,7 +134,8 @@ bivrost --config /path/to/config.yaml
 
 ### Help Output
 
-```bash-help]
+```bash
+
 ```
 
 ```bash

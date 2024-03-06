@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/pynezz/bivrost/internal/config"
 
@@ -20,9 +21,12 @@ type app struct {
 func NewServer(cfg *config.Config) *fiber.App {
 	app := fiber.New(fiber.Config{
 		// Fiber configuration options here
-		ReadTimeout:  cfg.ReadTimeout,
-		WriteTimeout: cfg.WriteTimeout,
+		ReadTimeout:  time.Duration(cfg.Network[1].ReadTimeout) * time.Second, // Convert seconds to time.Duration
+		WriteTimeout: time.Duration(cfg.Network[1].WriteTimeout) * time.Second,
 	})
+
+	output := fmt.Sprintf("Server started with\n\tread timeout: %d\n\twrite timeout: %d\n", cfg.Network[0].ReadTimeout, cfg.Network[1].WriteTimeout)
+	fmt.Println(output)
 
 	// Middleware
 	app.Use(logger.New()) // Log every request
@@ -73,3 +77,11 @@ func wsHandler(c *websocket.Conn) {
 		}
 	}
 }
+
+// func newRoute(method string, path string, handler func(*fiber.Ctx) error) *fiber.Route {
+// 	return &fiber.Route{
+// 		Method:  method,
+// 		Path:    path,
+// 		Handler: handler,
+// 	}
+// }
