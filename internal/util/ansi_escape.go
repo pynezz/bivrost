@@ -70,8 +70,16 @@ func PrintErrorf(format string, a ...interface{}) {
 	fmt.Printf("%s[!]%s %s\n", Red, Reset, fmt.Sprintf(format, a...))
 }
 
+func ColorF(color, format string, a ...interface{}) string {
+	return fmt.Sprintf("%s%s%s", color, fmt.Sprintf(format, a...), Reset)
+}
+
 func Errorf(format string, a ...interface{}) error {
 	return fmt.Errorf("%s[!]%s %s", Red, Reset, fmt.Sprintf(format, a...))
+}
+
+func ItalicF(format string, a ...interface{}) string {
+	return fmt.Sprintf("%s%s%s", "\033[3m", fmt.Sprintf(format, a...), Reset)
 }
 
 // PrintInfo prints an info message to the console
@@ -92,6 +100,11 @@ func PrintDebug(msg string) {
 // PrintBold prints a bold message to the console
 func PrintBold(msg string) {
 	fmt.Printf("%s%s%s\n", Bold, msg, Reset)
+}
+
+// PrintItalic prints an italic message to the console
+func PrintItalic(msg string) {
+	fmt.Printf("%s%s%s\n", "\033[3m", msg, Reset)
 }
 
 // PrintUnderline prints an underlined message to the console

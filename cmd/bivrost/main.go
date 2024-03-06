@@ -3,27 +3,38 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
 
-	"github.com/pynezz/bivrost/internal/api"
 	"github.com/pynezz/bivrost/internal/config"
 
+	"github.com/pynezz/bivrost/internal/util/flags"
+
+	"github.com/pynezz/bivrost/internal/tui"
 	"github.com/pynezz/bivrost/internal/util"
 )
 
 func main() {
-	configPath := flag.String("config", "config.json", "Path to the configuration file")
-	// help := flag.Bool("help", false, "Print this help message")
-	// versionFlag := flag.Bool("version", false, "Print version information")
+	tui.Header.Color = util.Cyan
+	tui.Header.PrintHeader()
 
-	util.ParseFlags()
+	if len(os.Args) < 2 {
+		util.PrintWarning("No arguments provided. Use -h for help.")
 
-	cfg, err := config.LoadConfig(*configPath)
+		flag.Usage()
+		return
+	}
+
+	flags.ParseFlags()
+
+	cfg, err := config.LoadConfig(*flags.Params.ConfigPath)
 	if err != nil {
 		fmt.Println(err)
 		fmt.Println("Exiting...")
 		return
 	}
 
-	app := api.NewServer(cfg)
-	app.Listen(":3000")
+	fmt.Println(cfg)
+
+	// app := api.NewServer(cfg)
+	// app.Listen(":3000")
 }
