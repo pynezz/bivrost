@@ -10,9 +10,5 @@
 *.test
 *.out
 
-# Ignore go mod cache
-go.sum
-go.mod
-
 # MacOS
 .DS_Store
