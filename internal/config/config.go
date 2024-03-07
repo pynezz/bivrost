@@ -54,3 +54,42 @@ func LoadConfig(path string) (*Config, error) {
 	util.PrintSuccess(fmt.Sprintf("Loaded configuration file: %s at %s", file.Name(), path))
 	return &cfg, nil
 }
+
+func WriteConfig(cfg *Config, path string) error {
+	// Open the file for writing
+	file, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	// Marshal the config to YAML
+	buf, err := yaml.Marshal(cfg)
+	if err != nil {
+		return err
+	}
+
+	// Write the buffer to the file
+	_, err = file.Write(buf)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// FIBER says POST Method Not allowed.
+
+// The reason for this is that the Fiber framework does not allow the POST method by default.
+// To enable it, you need to add the following line to the main.go file:
+// app.Post("/config/:id", updateConfigHandler)
+// This will allow the POST method to be used on the /config/:id route.
+// But you also need to implement the updateConfigHandler function in the server.go file.
+// This function should handle the POST request and update the configuration.
+// Here is an example of how you can implement the updateConfigHandler function:
+// func updateConfigHandler(c *fiber.Ctx) error {
+// 	// Update the configuration here
+// 	id := c.Params("id")
+// 	fmt.Println("Updating configuration for ID:", id)
+// 	return c.SendString("Configuration updated")
+// }

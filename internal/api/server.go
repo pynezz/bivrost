@@ -23,6 +23,9 @@ func NewServer(cfg *config.Config) *fiber.App {
 		// Fiber configuration options here
 		ReadTimeout:  time.Duration(cfg.Network[1].ReadTimeout) * time.Second, // Convert seconds to time.Duration
 		WriteTimeout: time.Duration(cfg.Network[1].WriteTimeout) * time.Second,
+
+		// Allow methods
+		RequestMethods: []string{"GET", "HEAD", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"},
 	})
 
 	output := fmt.Sprintf("Server started with\n\tread timeout: %d\n\twrite timeout: %d\n", cfg.Network[0].ReadTimeout, cfg.Network[1].WriteTimeout)
@@ -44,13 +47,28 @@ func setupRoutes(app *fiber.App, cfg *config.Config) {
 	// WebSocket route
 	app.Get("/ws", websocket.New(wsHandler))
 
+	app.Post("/config/:id", updateConfigHandler)
+
 	// Threat Intel API routes
 	// app.Get("/api/v1/threats", getThreatsHandler)
 
 }
 
+func updateConfigHandler(c *fiber.Ctx) error {
+	// Update the configuration here
+	id := c.Params("id")
+	fmt.Println("Updating configuration for ID:", id)
+	return c.SendString("Configuration updated")
+}
+
 // indexHandler handles the root path.
 func indexHandler(c *fiber.Ctx) error {
+	c.Accepts("html")                           // "html"
+	c.Accepts("text/html")                      // "text/html"
+	c.Accepts("json", "text")                   // "json"
+	c.Accepts("application/json")               // "application/json"
+	c.Accepts("text/plain", "application/json") // "application/json", due to quality
+	// c.Accepts("POST")                           // ""
 	return c.SendString("Bivrost Fiber API Server is up and running!")
 }
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/pynezz/bivrost/internal/api"
 	"github.com/pynezz/bivrost/internal/config"
 
 	"github.com/pynezz/bivrost/internal/util/flags"
@@ -35,6 +36,6 @@ func main() {
 
 	fmt.Println(cfg)
 
-	// app := api.NewServer(cfg)
-	// app.Listen(":3000")
+	app := api.NewServer(cfg)
+	app.Listen(":3000")
 }
