@@ -10,7 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type Config struct {
+type Cfg struct {
 	Sources []struct {
 		Name     string   `yaml:"name"`
 		Type     string   `yaml:"type"`
@@ -25,7 +25,7 @@ type Config struct {
 }
 
 // LoadConfig loads the configuration from the given path
-func LoadConfig(path string) (*Config, error) {
+func LoadConfig(path string) (*Cfg, error) {
 
 	// First, let's check if the file exists via the util function fs.GetFile
 	file, err := fs.GetFile(path)
@@ -45,7 +45,7 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, err
 	}
 
-	var cfg Config
+	var cfg Cfg
 	err = yaml.Unmarshal(buf, &cfg) // From buf, to &cfg. &cfg is a pointer to the Config struct memory address
 	if err != nil {
 		return nil, err
@@ -55,7 +55,7 @@ func LoadConfig(path string) (*Config, error) {
 	return &cfg, nil
 }
 
-func WriteConfig(cfg *Config, path string) error {
+func WriteConfig(cfg *Cfg, path string) error {
 	// Open the file for writing
 	file, err := os.Create(path)
 	if err != nil {

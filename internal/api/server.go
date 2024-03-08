@@ -6,26 +6,38 @@ import (
 	"time"
 
 	"github.com/pynezz/bivrost/internal/config"
+	"github.com/pynezz/bivrost/internal/middleware"
+	"github.com/pynezz/bivrost/internal/util"
+	"github.com/pynezz/bivrost/internal/util/crypto"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/websocket/v2"
 )
 
-type app struct {
+type App struct {
 	*fiber.App
-	fiber.Route
+}
+
+type IntelRequest struct {
+	Id string `json:"id"`
+	Ip string `json:"ip"`
+}
+
+type ConfigRequest struct {
+	Fields config.Cfg `text:"id" json:"id" yaml:"id"`
 }
 
 // NewServer initializes a new API server with the provided configuration.
-func NewServer(cfg *config.Config) *fiber.App {
+// Renamed config.Config to config.Cfg to avoid confusion with the Fiber Config struct
+func NewServer(cfg *config.Cfg) *fiber.App {
 	app := fiber.New(fiber.Config{
 		// Fiber configuration options here
 		ReadTimeout:  time.Duration(cfg.Network[1].ReadTimeout) * time.Second, // Convert seconds to time.Duration
 		WriteTimeout: time.Duration(cfg.Network[1].WriteTimeout) * time.Second,
 
 		// Allow methods
-		RequestMethods: []string{"GET", "HEAD", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"},
+		// RequestMethods: []string{"GET", "HEAD", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"},
 	})
 
 	output := fmt.Sprintf("Server started with\n\tread timeout: %d\n\twrite timeout: %d\n", cfg.Network[0].ReadTimeout, cfg.Network[1].WriteTimeout)
@@ -34,6 +46,19 @@ func NewServer(cfg *config.Config) *fiber.App {
 	// Middleware
 	app.Use(logger.New()) // Log every request
 
+	// Generate a secure secret key for JWT authentication
+	secretKey, err := crypto.GenerateSecretKey() // I know this is not properly implemented, but it's just for testing purposes
+	if err != nil {
+		log.Fatalf("Error generating secret key: %v", err)
+	}
+
+	// Base64 encode the secret key
+	// key := base64.StdEncoding.EncodeToString([]byte(secretKey))
+	fmt.Println(util.ColorF(util.DarkYellow, "Secret key: %s", secretKey))
+
+	// app.Use(middleware.AuthMiddleware(secretKey))
+	app.Get("/dashboard", middleware.AuthMiddleware(secretKey))
+
 	// Setup routes
 	setupRoutes(app, cfg)
 
@@ -41,23 +66,92 @@ func NewServer(cfg *config.Config) *fiber.App {
 }
 
 // setupRoutes configures all the routes for the API server.
-func setupRoutes(app *fiber.App, cfg *config.Config) {
+func setupRoutes(app *fiber.App, cfg *config.Cfg) {
 	app.Get("/", indexHandler)
 
 	// WebSocket route
 	app.Get("/ws", websocket.New(wsHandler))
 
-	app.Post("/config/:id", updateConfigHandler)
+	// TODO
+	app.Post("/config/add_source", func(c *fiber.Ctx) error {
+		c.Accepts("application/yaml", "application/json")
+		// Serialize the request body to a struct
+		var configRequest ConfigRequest
+		if err := c.BodyParser(&configRequest.Fields.Sources); err != nil {
+			return err
+		}
+
+		updatedFields := c.Body()
+
+		fmt.Println("ID" + util.ColorF(util.DarkYellow, "%s", updatedFields))
+
+		// fmt.Println(c.Body())
+		return c.SendString("Configuration updated")
+	})
+
+	config.WriteConfig(cfg, "config.yaml")
+
+	app.Post("/api/v1/intel/", func(c *fiber.Ctx) error {
+		c.AcceptsEncodings("application/json")
+		payload := new(IntelRequest)
+		if err := c.BodyParser(payload); err != nil {
+			return err
+		}
+		fmt.Println(payload)
+		return c.JSON(payload)
+	})
+
+	app.Get("/auth/:id", func(c *fiber.Ctx) error {
+		q := c.Queries()
+		fmt.Println("[i] Query parameters")
+		for k, v := range q {
+			fmt.Printf("[i] Key: %s, Value: %s\n", k, v)
+		}
+
+		key := q["key"]
+		fmt.Println("Key: ", key)
+
+		if c.Params("id") == "test" {
+			token, err := middleware.GenerateToken("test", key)
+			if err != nil {
+				return c.SendStatus(fiber.StatusInternalServerError)
+			}
+
+			response := map[string]string{
+				"status": "ok",
+				"token":  token,
+			}
+
+			return c.SendString("Authenticated. Here's your session JWT: " + response["token"])
+		}
+		return c.SendStatus(fiber.StatusUnauthorized)
+	})
 
 	// Threat Intel API routes
 	// app.Get("/api/v1/threats", getThreatsHandler)
 
 }
 
+// isAuthenticated checks if the user is authenticated.
+func isAuthenticated(c *fiber.Ctx) bool {
+	// Check if the user is authenticated
+	return true
+}
+
+func handleAuth(c *fiber.Ctx) error {
+	// Check if the user is authenticated
+	if !isAuthenticated(c) {
+		// If not, redirect to the login page
+		return c.Redirect("/login")
+	}
+
+	// If the user is authenticated, call the next handler
+	return c.Next()
+}
+
 func updateConfigHandler(c *fiber.Ctx) error {
-	// Update the configuration here
-	id := c.Params("id")
-	fmt.Println("Updating configuration for ID:", id)
+	fmt.Println(string(c.Body()))
+
 	return c.SendString("Configuration updated")
 }
 

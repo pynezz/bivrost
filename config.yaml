@@ -1,43 +1,32 @@
-# Considering if YAML or JSON is better alternatives for our config file system.
-# Both JSON and YAML has good support in Go.
-# YAML is way easier to read by a human.
-# YAML also supports comments, which means we can guide the user through the configuration file.
 sources:
-  - name: siem logs
-    type: directory
-    location: /var/log/siem
-    format: json
-    tags:
-      - siem
-      - logs
-# Here ends the first source
-
-# Here starts a new source.
-  - name: syslog    # Arbitrary name of the source
-    type: service   # Type of the source
-    location: ' '   # Location of the source(such as path, uri, rpc, and ipc)
-    format: json    # Format bivfrost should expect
-    tags:           # Tags to be used for filtering
-      - syslog      # Tag for filtering
-      - logs        # Tag for filtering
-
-  - name: threat intel
-    type: module
-    location: /path/or/uri/to/module/output
-    format: json
-    tags:
-      - intel
-      - module
-
-  - name: thevalve
-    type: module
-    location: ' '
-    format: raw
-    tags:
-      - credentials
-      - module
-
-# The network configuration. Best left untouched if you're unsure
+    - name: siem logs
+      type: directory
+      location: /var/log/siem
+      format: json
+      tags:
+        - siem
+        - logs
+    - name: syslog
+      type: service
+      location: ' '
+      format: json
+      tags:
+        - syslog
+        - logs
+    - name: threat intel
+      type: module
+      location: /path/or/uri/to/module/output
+      format: json
+      tags:
+        - intel
+        - module
+    - name: thevalve
+      type: module
+      location: ' '
+      format: raw
+      tags:
+        - credentials
+        - module
 network:
-  - read_timeout: 10  # time in seconds - default for Go Fiber is unlimited. Hence why we change it to a custom amount
-  - write_timeout: 10 # time in seconds
+    - read_timeout: 10
+    - write_timeout: 10
