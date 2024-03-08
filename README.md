@@ -157,3 +157,12 @@ Usage:
 ## Integrated with TheValve
 
 Bivrost is integrated with TheValve, where TheValve serves as a secure storage and cryptographic service for Bivrost.
+
+## Authentication
+
+- Hashing algorithm and key derivation: Argon2 HMAC-SHA256
+- Tokens (JWT-HS256)
+
+## Backend web framework
+
+- Go Fiber
