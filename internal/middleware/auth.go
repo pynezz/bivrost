@@ -64,7 +64,7 @@ func GenerateToken(userID, secretKey string) (string, error) {
 	claims := Claims{
 		UserID: userID,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)), // Token expires in 24 hours
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(9 * time.Hour)), // Token expires in 9 hours (one work-day + one hour overtime 😄)
 			Issuer:    "Bachelorprosjekt",
 			Subject:   "UserAuthentication",
 		},
