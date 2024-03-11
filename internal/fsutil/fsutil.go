@@ -1,5 +1,5 @@
 // filesystem handling
-package fs
+package fsutil
 
 import (
 	"fmt"
@@ -30,7 +30,10 @@ func GetFiles(dirname string) ([]string, error) {
 	files := []string{}
 	err := filepath.Walk(dirname, func(path string, info os.FileInfo, err error) error {
 		if !info.IsDir() {
+			util.PrintInfo(fmt.Sprintf("Found file: %s", path))
 			files = append(files, path)
+		} else {
+			util.PrintInfo(fmt.Sprintf("Found directory: %s", path))
 		}
 		return nil
 	})

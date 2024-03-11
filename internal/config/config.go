@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/pynezz/bivrost/internal/fs"
+	"github.com/pynezz/bivrost/internal/fsutil"
 	"github.com/pynezz/bivrost/internal/util"
 
 	"gopkg.in/yaml.v3"
@@ -18,17 +18,20 @@ type Cfg struct {
 		Format   string   `yaml:"format"`
 		Tags     []string `yaml:"tags"`
 	} `yaml:"sources"`
-	Network []struct {
+	Network struct {
 		ReadTimeout  int `yaml:"read_timeout,omitempty"`
 		WriteTimeout int `yaml:"write_timeout,omitempty"`
 	} `yaml:"network"`
+	Database struct {
+		Path string `yaml:"path"`
+	} `yaml:"users_database"`
 }
 
 // LoadConfig loads the configuration from the given path
 func LoadConfig(path string) (*Cfg, error) {
 
 	// First, let's check if the file exists via the util function fs.GetFile
-	file, err := fs.GetFile(path)
+	file, err := fsutil.GetFile(path)
 
 	// If the file does not exist, we should return an error
 	if err != nil {

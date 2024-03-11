@@ -33,14 +33,14 @@ type ConfigRequest struct {
 func NewServer(cfg *config.Cfg) *fiber.App {
 	app := fiber.New(fiber.Config{
 		// Fiber configuration options here
-		ReadTimeout:  time.Duration(cfg.Network[1].ReadTimeout) * time.Second, // Convert seconds to time.Duration
-		WriteTimeout: time.Duration(cfg.Network[1].WriteTimeout) * time.Second,
+		ReadTimeout:  time.Duration(cfg.Network.ReadTimeout) * time.Second, // Convert seconds to time.Duration
+		WriteTimeout: time.Duration(cfg.Network.WriteTimeout) * time.Second,
 
 		// Allow methods
 		// RequestMethods: []string{"GET", "HEAD", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"},
 	})
 
-	output := fmt.Sprintf("Server started with\n\tread timeout: %d\n\twrite timeout: %d\n", cfg.Network[0].ReadTimeout, cfg.Network[1].WriteTimeout)
+	output := fmt.Sprintf("Server started with\n\tread timeout: %d\n\twrite timeout: %d\n", cfg.Network.ReadTimeout, cfg.Network.WriteTimeout)
 	fmt.Println(output)
 
 	// Middleware

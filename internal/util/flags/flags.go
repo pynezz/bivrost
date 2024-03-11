@@ -10,6 +10,7 @@ import (
 
 type Arguments struct {
 	ConfigPath *string
+	Test       *string
 }
 
 var (
@@ -21,6 +22,8 @@ var (
 	configPathS *string
 
 	Params Arguments
+
+	testFlag *string
 )
 
 const usage = `Usage: bivrost [options]
@@ -28,7 +31,9 @@ const usage = `Usage: bivrost [options]
 Options:
   -v, --version    		Print version information
   -h, --help       		Print this help message
-  -c, --config PATH		Path to the configuration file`
+  -c, --config PATH		Path to the configuration file
+
+  --test <param>        Used for testing purposes`
 
 func init() {
 	flag.Usage = func() {
@@ -43,7 +48,13 @@ func init() {
 
 	configPathL = flag.String("config", "config.yaml", "Path to the configuration file")
 	configPathS = flag.String("c", "", "")
+	testFlag := flag.String("test", "", "Used for testing purposes")
+
+	Params.Test = testFlag
 	Params.ConfigPath = configPathL // Default value of "config.yaml" (will be overwritten if the flag is set)
+
+	// --test
+
 }
 
 // // Get version information
@@ -68,6 +79,9 @@ func ParseFlags() *Arguments {
 		} else {
 			Params.ConfigPath = configPathS
 		}
+	case *testFlag != "":
+		util.PrintWarning("Test flag is set: " + *testFlag)
+		Params.Test = testFlag
 	default:
 		util.PrintWarning("This should not happen. Please report this issue.") // It should be taken care of in main.go
 	}

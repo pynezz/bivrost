@@ -28,5 +28,7 @@ sources:
         - credentials
         - module
 network:
-    - read_timeout: 10
-    - write_timeout: 10
+    read_timeout: 10
+    write_timeout: 10
+users_database:
+    path: users.db

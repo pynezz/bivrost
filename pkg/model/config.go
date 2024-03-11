@@ -6,8 +6,9 @@ package model
 
 // Config represents the top-level configuration structure for Bivrost.
 type Config struct {
-	Sources []Source        `yaml:"sources"`
-	Network []NetworkConfig `yaml:"network"`
+	Sources  []Source       `yaml:"sources"`
+	Network  NetworkConfig  `yaml:"network"`
+	Database DatabaseConfig `yaml:"database"`
 }
 
 // Source defines the configuration for a single source in the Bivrost system.
@@ -23,4 +24,8 @@ type Source struct {
 type NetworkConfig struct {
 	ReadTimeout  int `yaml:"read_timeout,omitempty"`
 	WriteTimeout int `yaml:"write_timeout,omitempty"`
+}
+
+type DatabaseConfig struct {
+	Path string `yaml:"path"`
 }
