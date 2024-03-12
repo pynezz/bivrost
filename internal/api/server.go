@@ -31,13 +31,11 @@ type ConfigRequest struct {
 // NewServer initializes a new API server with the provided configuration.
 // Renamed config.Config to config.Cfg to avoid confusion with the Fiber Config struct
 func NewServer(cfg *config.Cfg) *fiber.App {
-	app := fiber.New(fiber.Config{
-		// Fiber configuration options here
-		ReadTimeout:  time.Duration(cfg.Network.ReadTimeout) * time.Second, // Convert seconds to time.Duration
-		WriteTimeout: time.Duration(cfg.Network.WriteTimeout) * time.Second,
 
-		// Allow methods
-		// RequestMethods: []string{"GET", "HEAD", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"},
+	// Configure the fiber server with values from the config file
+	app := fiber.New(fiber.Config{
+		ReadTimeout:  time.Duration(cfg.Network.ReadTimeout) * time.Second,  // Convert seconds to time.Duration
+		WriteTimeout: time.Duration(cfg.Network.WriteTimeout) * time.Second, // TODO: Add a way to check if the config values are valid
 	})
 
 	output := fmt.Sprintf("Server started with\n\tread timeout: %d\n\twrite timeout: %d\n", cfg.Network.ReadTimeout, cfg.Network.WriteTimeout)
@@ -57,7 +55,7 @@ func NewServer(cfg *config.Cfg) *fiber.App {
 	fmt.Println(util.ColorF(util.DarkYellow, "Secret key: %s", secretKey))
 
 	// app.Use(middleware.AuthMiddleware(secretKey))
-	app.Get("/dashboard", middleware.AuthMiddleware(secretKey))
+	app.Get("/dashboard", middleware.Bouncer(secretKey))
 
 	// Setup routes
 	setupRoutes(app, cfg)
@@ -72,7 +70,6 @@ func setupRoutes(app *fiber.App, cfg *config.Cfg) {
 	// WebSocket route
 	app.Get("/ws", websocket.New(wsHandler))
 
-	// TODO
 	app.Post("/config/add_source", func(c *fiber.Ctx) error {
 		c.Accepts("application/yaml", "application/json")
 		// Serialize the request body to a struct
@@ -85,7 +82,8 @@ func setupRoutes(app *fiber.App, cfg *config.Cfg) {
 
 		fmt.Println("ID" + util.ColorF(util.DarkYellow, "%s", updatedFields))
 
-		// fmt.Println(c.Body())
+		// TODO: Write the updated configuration to the file
+
 		return c.SendString("Configuration updated")
 	})
 
@@ -162,7 +160,6 @@ func indexHandler(c *fiber.Ctx) error {
 	c.Accepts("json", "text")                   // "json"
 	c.Accepts("application/json")               // "application/json"
 	c.Accepts("text/plain", "application/json") // "application/json", due to quality
-	// c.Accepts("POST")                           // ""
 	return c.SendString("Bivrost Fiber API Server is up and running!")
 }
 

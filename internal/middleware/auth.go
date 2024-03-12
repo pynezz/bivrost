@@ -1,4 +1,4 @@
-package middleware
+package middleware // Could maybe rename to handlers
 
 import (
 	"fmt"
@@ -16,8 +16,8 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
-// AuthMiddleware is a middleware that checks if the user is authenticated.
-func AuthMiddleware(secretKey string) fiber.Handler {
+// Bouncer is a middleware that checks if the user is authenticated.
+func Bouncer(secretKey string) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		fmt.Println("Authenticating user...")
 		// Extract the token from the Authorization header.

@@ -13,14 +13,14 @@ VALUES
     (1, 'Password'),
     (2, 'WebAuthn');
 
-CREATE TABLE user_sessions (
+CREATE TABLE user_sessions ( -- This table will store the user sessions
     SessionID TEXT PRIMARY KEY,
     UserID INTEGER NOT NULL,
     Token TEXT NOT NULL, /* The user session is a JWT Token */
     FOREIGN KEY (UserID) REFERENCES users(UserID) ON DELETE CASCADE
 );
 
-CREATE TABLE webauthn_auth (
+CREATE TABLE webauthn_auth (    -- This table will store essential data for WebAuthn authentication
     CredentialID TEXT PRIMARY KEY,
     UserID INTEGER NOT NULL,
     PublicKey TEXT NOT NULL,
@@ -30,9 +30,9 @@ CREATE TABLE webauthn_auth (
     FOREIGN KEY (UserID) REFERENCES users(UserID) ON DELETE CASCADE
 );
 
-CREATE TABLE password_auth (
+CREATE TABLE password_auth ( -- This table will store the related rows for password authentication
     UserID INTEGER PRIMARY KEY,
     Enabled BOOLEAN DEFAULT 1, -- SQLite uses 1 for TRUE
-    PasswordHash TEXT NOT NULL,
+    PasswordHash TEXT NOT NULL, -- Argon2 hash
     FOREIGN KEY (UserID) REFERENCES users(UserID) ON DELETE CASCADE
 );
