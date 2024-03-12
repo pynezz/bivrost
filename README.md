@@ -73,6 +73,7 @@ This will have to be revised as the project progresses.
 ```
 
 We might need to evaluate if YAML simply is better for our purpose, considering the config file will be used by users that might find this format more intuitive.
+> We decided to go with YAML 👍
 
 ```yaml
 # YAML also supports comments, which means we can guide the user through the configuration file.
@@ -118,9 +119,10 @@ sources:
 
 network:
   - read_timeout: 10  # time in seconds
-  - write_timeout: 10 # time in seconds
+  - write_timeout: 10 # time in seconds'
 
-# Here we can add more keys and values as we see fit.
+users_database:
+  path: /path/to/users.db
 
 ```
 
@@ -134,14 +136,11 @@ bivrost --config /path/to/config.yaml
 
 ### Help Output
 
-
 ```bash
+$ bivrost -h
 
-```
-
-```bash
 Usage:
-  --config <string>     Path to the configuration file (default "config.json")
+  --config <string>     Path to the configuration file (default "config.yaml")
   --version             Print version information
 
   -h, --help            Print this help message
@@ -156,13 +155,27 @@ Usage:
 
 ## Integrated with TheValve
 
-Bivrost is integrated with TheValve, where TheValve serves as a secure storage and cryptographic service for Bivrost.
+Bivrost is integrated with [TheValve](https://github.com/pynezz/thevalve), where TheValve serves as a secure storage and cryptographic service for Bivrost.
 
 ## Authentication
 
 - Hashing algorithm and key derivation: Argon2 HMAC-SHA256
 - Tokens (JWT-HS256)
 
-## Backend web framework
+## Database
 
-- Go Fiber
+- sqlite3
+
+## Packages
+
+- [Go Fiber](https://gofiber.io/)
+- [go-sqlite3](https://github.com/mattn/go-sqlite3)
+
+## Requirements for compiling
+
+- Go version > 1.21
+- gcc *(for go-sqlite3 as it requires cgo)*
+
+## License
+
+*TBD*

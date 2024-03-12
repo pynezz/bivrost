@@ -26,9 +26,11 @@ import (
 // 7. It creates a new server and listens on port 3000.
 
 func main() {
+	// Print the startup header
 	tui.Header.Color = util.Cyan
 	tui.Header.PrintHeader()
 
+	// Check for command line arguments
 	if len(os.Args) < 2 {
 		util.PrintWarning("No arguments provided. Use -h for help.")
 
@@ -36,8 +38,8 @@ func main() {
 		return
 	}
 
+	// Parse the command line arguments (flags)
 	flags.ParseFlags()
-
 	if *flags.Params.Test != "" {
 		if *flags.Params.Test == "db" {
 			testDbConnection()
@@ -48,6 +50,7 @@ func main() {
 		}
 	}
 
+	// Load the config
 	cfg, err := config.LoadConfig(*flags.Params.ConfigPath)
 	if err != nil {
 		fmt.Println(err)
@@ -55,13 +58,15 @@ func main() {
 		return
 	}
 
-	fmt.Println(cfg)
-
-	if _, err := middleware.NewDBService().Connect(cfg.Database.Path); err != nil {
+	// Connect to database
+	db, err := middleware.NewDBService().Connect(cfg.Database.Path)
+	if err != nil {
 		util.PrintError(err.Error())
 		return
 	}
+	defer db.Close()
 
+	// Create the web server
 	app := api.NewServer(cfg)
 	app.Listen(":3000")
 }

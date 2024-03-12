@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"os"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/mattn/go-sqlite3" // https://pkg.go.dev/github.com/mattn/go-sqlite3#section-readme
 
 	"github.com/pynezz/bivrost/internal/fsutil"
 	"github.com/pynezz/bivrost/internal/util"
@@ -63,6 +63,7 @@ func (db *Database) Connect(dbPath string) (*sql.DB, error) {
 
 }
 
+// Use this function to create a new database from the migration scripts
 func (db *Database) Migrate() error {
 	migrationFiles, err := fsutil.GetFiles("./db/migrations/")
 	util.PrintSuccess(fmt.Sprintf("Found %d migration files", len(migrationFiles)))
@@ -95,4 +96,19 @@ func (db *Database) Migrate() error {
 		}
 	}
 	return err
+}
+
+// Check for connectivity with the database
+func (db *Database) IsConnected() (bool, error) {
+	err := db.driver.Ping()
+	return err == nil, err
+}
+
+// Close the database connection
+func (db *Database) Close() error {
+	return db.driver.Close()
+}
+
+func (db *Database) Write(fmt string, a ...interface{}) {
+	util.PrintColorf(util.LightGreen, fmt, a...)
 }

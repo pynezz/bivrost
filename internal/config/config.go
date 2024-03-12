@@ -42,19 +42,22 @@ func LoadConfig(path string) (*Cfg, error) {
 	// Defer the file close, so it's closed after the function returns
 	defer file.Close()
 
-	// Buf is a byte slice, which will be used to pass the file contents to the yaml.Unmarshal function
+	// Buf is a byte slice, which will be used to
+	// pass the file contents to the yaml.Unmarshal function
 	buf, err := os.ReadFile(file.Name())
 	if err != nil {
 		return nil, err
 	}
 
 	var cfg Cfg
-	err = yaml.Unmarshal(buf, &cfg) // From buf, to &cfg. &cfg is a pointer to the Config struct memory address
+	// From buf, to &cfg. &cfg is a pointer to the Config struct memory address
+	err = yaml.Unmarshal(buf, &cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	util.PrintSuccess(fmt.Sprintf("Loaded configuration file: %s at %s", file.Name(), path))
+	util.PrintSuccess(fmt.Sprintf(
+		"Loaded configuration file: %s at %s", file.Name(), path))
 	return &cfg, nil
 }
 
