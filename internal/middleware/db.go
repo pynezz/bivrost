@@ -73,15 +73,14 @@ package middleware
 // );
 
 import (
+	"crypto/rand"
 	"database/sql"
 	"fmt"
 	"os"
-	"time"
 
 	_ "github.com/mattn/go-sqlite3" // https://pkg.go.dev/github.com/mattn/go-sqlite3#section-readme
 
 	"github.com/pynezz/bivrost/internal/fsutil"
-	"github.com/pynezz/bivrost/internal/middleware/users"
 	"github.com/pynezz/bivrost/internal/util"
 )
 
@@ -271,19 +270,36 @@ func testWrite(database *Database) {
 	//     SessionId TEXT,
 	//     AuthMethodID INTEGER   /* This is a foreign key to the auth_methods table,
 	//
-	today := time.Now().Format("01-02-2006 15:04:05")
+	// today := time.Now().Format("01-02-2006 15:04:05")
 	displayName := "John Doe"
-	user := users.User{
-		DisplayName:     displayName,
-		Role:            "user",
-		LastLogin:       today,
-		FirstName:       "John",
-		ProfileImageUrl: fmt.Sprintf("%s%s%s", "https://picsum.photos/seed/", displayName, "/200/200"),
-		SessionId:       "1234567890",
-		AuthMethodID:    0,
+
+	// Generate a random 32-bit integer
+	randomID := rand.Int31n(1000000)
+
+	profileImageUrl := PlaceholderImage{
+		Width:  200,
+		Height: 200,
+		Text:   displayName,
 	}
 
-	data
+	u := User{
+		UserID:      int(randomID),
+		DisplayName: displayName,
+		// CreatedAt:   string(today),
+		// UpdatedAt:   today,
+		Role:            "user",
+		FirstName:       "John",
+		ProfileImageUrl: GetPlaceholderImage(profileImageUrl),
+		// SessionId:       rand.Int(10, 32),
+		AuthMethodID: 1,
+	}
+
+	err := database.Write("INSERT INTO users (UserID, DisplayName, CreatedAt, UpdatedAt, Role, FirstName, ProfileImageURL, SessionId, AuthMethodID) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		u.UserID, u.DisplayName, u.CreatedAt, u.UpdatedAt, u.Role, u.FirstName, u.ProfileImageURL, u.SessionId, u.AuthMethodID)
+	if err != nil {
+		util.PrintError(err.Error())
+	}
+
 }
 
 func testPrintRows(rows []RowScanner) {

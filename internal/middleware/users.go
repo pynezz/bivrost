@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"strconv"
+
 	"github.com/pynezz/bivrost/internal/util"
 )
 
@@ -83,18 +85,34 @@ func NewUserValidationError(message string) *UserValidationError {
 // because the user in the auth package is used for authentication,
 // and this user is used for user management
 type User struct {
-	UserID          int    `json:"id"`
+	UserID          int    `json:"id"` // As of now (13.03.24), this is set by the database. Should be set by bivrost
 	DisplayName     string `json:"displayname"`
 	LastLogin       string `json:"lastlogin"`
-	// Role            string `json:"role"`
+	Role            string `json:"role"`
 	FirstName       string `json:"firstname"`
-	// ProfileImageUrl string `json:"profileimageurl"`
+	ProfileImageUrl string `json:"profileimageurl"`
 	SessionId       string `json:"sessionid"`
 	AuthMethodID    int    `json:"authmethodid"`
 }
 
 type Users struct {
 	Users []User `json:"users"`
+}
+
+// For incoming requests to create a user
+type CreateUserRequest struct {
+	DisplayName     string `json:"displayname"`
+	Password        string `json:"password"`
+	Role            string `json:"role"`
+	FirstName       string `json:"firstname"`
+	ProfileImageUrl string `json:"profileimageurl"`
+}
+
+// What to answer when a user is created
+type CreateUserResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+	Data    User   `json:"data"`
 }
 
 // NewUser creates a new user
@@ -111,22 +129,25 @@ func NewUser(
 	role string,
 	firstname string,
 	profileimageurl string,
-	sessionid string,
-	authmethodid int) User {
-	return User{ // Returns a copy of the User struct with the given values
+) CreateUserRequest {
+	if firstname == "" {
+		firstname = displayname
+	}
+
+	return CreateUserRequest{ // Returns a copy of the User struct with the given values
 		DisplayName:     displayname,
+		Password:        password,
 		Role:            role,
 		FirstName:       firstname,
 		ProfileImageUrl: profileimageurl,
-		SessionId:       sessionid,
-		AuthMethodID:    authmethodid,
 	}
 }
 
 // ValidateUser validates the user struct and returns a boolean and a slice of errors if the validation fails
+// It's meant to be used by the CreateUser function, not by the user, or client itself
 // To be certain nothing is changed in the user struct, I'm passing a copy of the user struct
 // TODO: Test
-func ValidateUser(user User) (bool, []error) {
+func ValidateNewUser(user CreateUserRequest) (bool, []error) {
 	var err []error // In case we got multiple validation errors
 
 	switch {
@@ -135,12 +156,12 @@ func ValidateUser(user User) (bool, []error) {
 		// I want to keep going with the validation, even if one of the fields is invalid
 		// So I'm not returning here, but rather appending the error to the err slice
 
-	case user.Role == "":
-		err = append(err, NewUserValidationError("Role is required"))
-	case user.SessionId == "":
-		err = append(err, NewUserValidationError("Session ID is required"))
-	case user.AuthMethodID < 0 || user.AuthMethodID > 1:
-		err = append(err, NewUserValidationError("Invalid authentication method ID. Should be 0 (password) or 1 (webauthn)"))
+	case len(user.Password) < 12:
+		err = append(err, NewUserValidationError("Password must be at least 12 characters long"))
+	case user.Role != "admin" && user.Role != "user":
+		err = append(err, NewUserValidationError("Invalid role. Should be 'admin' or 'user'"))
+	case user.ProfileImageUrl == "":
+		err = append(err, NewUserValidationError("Profile image URL is required"))
 	default:
 		return true, nil
 	}
@@ -151,11 +172,11 @@ func ValidateUserPasswordAuth(userAuth PasswordAuth) (bool, []error) {
 	var err []error
 
 	switch {
-			case userAuth. == "":
+	case userAuth.PasswordHash == "":
 		err = append(err, NewUserValidationError("Password is required"))
 
-	case len(user.Password) < 12:
-		err = append(err, NewUserValidationError("Password must be at least 12 characters long"))
+	// case len(userAuth.PasswordHash.Password) < 12:
+	// err = append(err, NewUserValidationError("Password must be at least 12 characters long"))
 
 	default:
 		return true, nil
@@ -184,7 +205,7 @@ func GetUserByID(id string) User {
 	user := User{}
 
 	// Query the database for the user
-	instance, err := middleware.GetDBInstance()
+	instance, err := GetDBInstance()
 	if err != nil {
 		util.PrintErrorf("Something has went wrong in the application control flow. Check if the database is ever connected.\nExiting...\n")
 	}
@@ -202,4 +223,68 @@ func GetUserByDisplayName(displayname string) User {
 
 func DbToUserStruct() {
 
+}
+
+// https://placeholders.dev/
+//
+// Available API Options
+// width 		- Width of generated image. Defaults to 300.
+// height 		- Height of generated image. Defaults to 150.
+// text 		- Text to display on generated image. Defaults to the image dimensions.
+// fontFamily 	- Font to use for the text. Defaults to sans-serif.
+// fontWeight 	- Font weight to use for the text. Defaults to bold.
+// fontSize 	- Font size to use for the text. Defaults to 20% of the shortest image dimension, rounded down.
+// dy 			- Adjustment applied to the dy attribute of the text element to appear vertically centered. Defaults to 35% of the font size.
+// bgColor 		- Background color of the image. Defaults to #ddd
+// textColor 	- Color of the text. For transparency, use an rgba or hsla value. Defaults to rgba(0,0,0,0.5)
+// textWrap 	- Wrap text to fit within the image (to best ability). Will not alter font size, so especially long strings may still appear outside of the image. Defaults to false
+// Example URL
+// https://images.placeholders.dev/?width=1055&height=100&text=Made%20with%20placeholders.dev&bgColor=%23f7f6f6&textColor=%236d6e71
+
+type PlaceholderImage struct {
+	Width      int
+	Height     int
+	Text       string
+	FontFamily string
+	FontWeight string
+	FontSize   string
+	Dy         string
+	BgColor    string
+	TextColor  string
+	TextWrap   bool
+}
+
+// GetPlaceholderImage returns a URL to a placeholder image
+func GetPlaceholderImage(params PlaceholderImage) string {
+	// Make a request to the placeholders.dev API
+	// Return the image as a byte array
+
+	url := "https://images.placeholders.dev/"
+
+	switch {
+	case params.Width != 0:
+		url += "?width=" + string(params.Width)
+	case params.Height != 0:
+		url += "&height=" + string(params.Height)
+	case params.Text != "":
+		url += "&text=" + params.Text
+	case params.FontFamily != "":
+		url += "&fontFamily=" + params.FontFamily
+	case params.FontWeight != "":
+		url += "&fontWeight=" + params.FontWeight
+	case params.FontSize != "":
+		url += "&fontSize=" + params.FontSize
+	case params.Dy != "":
+		url += "&dy=" + params.Dy
+	case params.BgColor != "":
+		url += "&bgColor=" + params.BgColor
+	case params.TextColor != "":
+		url += "&textColor=" + params.TextColor
+	case params.TextWrap:
+		url += "&textWrap=" + strconv.FormatBool(params.TextWrap)
+	default:
+		url += ""
+	}
+
+	return url
 }
