@@ -44,7 +44,7 @@ func NewServer(cfg *config.Cfg) *fiber.App {
 	// Middleware
 	app.Use(logger.New()) // Log every request
 
-	// Generate a secure secret key for JWT authentication
+	// Generate a secure secret key for JWT authentication. This shoukld be done for every login request
 	secretKey, err := crypto.GenerateSecretKey() // I know this is not properly implemented, but it's just for testing purposes
 	if err != nil {
 		log.Fatalf("Error generating secret key: %v", err)
@@ -109,6 +109,7 @@ func setupRoutes(app *fiber.App, cfg *config.Cfg) {
 		key := q["key"]
 		fmt.Println("Key: ", key)
 
+		// This section should be placed in a separate function or in the auth middleware
 		if c.Params("id") == "test" {
 			token, err := middleware.GenerateToken("test", key)
 			if err != nil {
@@ -122,6 +123,8 @@ func setupRoutes(app *fiber.App, cfg *config.Cfg) {
 
 			return c.SendString("Authenticated. Here's your session JWT: " + response["token"])
 		}
+		// ----------------------------
+
 		return c.SendStatus(fiber.StatusUnauthorized)
 	})
 

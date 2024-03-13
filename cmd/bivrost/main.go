@@ -61,9 +61,14 @@ func main() {
 	// Connect to database
 	db, err := middleware.NewDBService().Connect(cfg.Database.Path)
 	if err != nil {
-		util.PrintError(err.Error())
+		util.PrintError("Main function: " + err.Error())
 		return
 	}
+
+	// As stated in the documentation:
+	// 	- It is rare to Close a DB, as the DB handle is meant to be long-lived and shared between many goroutines.
+	// However this is a defer statement, so it will be called when the function returns, which is the end of the main function.
+	// Meaning that the database will be closed when the application is closed.
 	defer db.Close()
 
 	// Create the web server

@@ -76,10 +76,12 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3" // https://pkg.go.dev/github.com/mattn/go-sqlite3#section-readme
 
 	"github.com/pynezz/bivrost/internal/fsutil"
+	"github.com/pynezz/bivrost/internal/middleware/users"
 	"github.com/pynezz/bivrost/internal/util"
 )
 
@@ -107,6 +109,7 @@ type Database struct {
 }
 
 var instance *Database // The global database instance
+var isConnected *bool  // The global database connection status
 
 // https://gosamples.dev/sqlite-intro/
 
@@ -122,9 +125,14 @@ func NewDBService() *Database {
 	return &Database{} // TODO: Implement
 }
 
-func GetDBInstance() *Database {
+func GetDBInstance() (*Database, error) {
 	// TODO: Add some error handling in case the instance is nil.
-	return instance
+	if instance == nil || !*isConnected {
+		return nil, error(util.Errorf(
+			"Database instance is not connected, or is nil. Please connect to the database first via the Connect method."))
+	}
+
+	return instance, nil
 }
 
 // Connect to the database
@@ -147,9 +155,14 @@ func (db *Database) Connect(dbPath string) (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	*isConnected, err = db.IsConnected()
+	if err != nil {
+		return nil, err
+	}
+
 	db.driver = driver
 	return driver, nil
-
 }
 
 // Use this function to create a new database from the migration scripts
@@ -226,6 +239,13 @@ func (db *Database) Fetch(query string, args ...interface{}) ([]RowScanner, erro
 
 	var result []RowScanner
 	for rows.Next() {
+		var field RowScanner
+		err := rows.Scan(&field)
+		if err != nil {
+			return nil, err
+		}
+
+		result = append(result, field)
 		// Here we need to account for the db structure.
 		// var field string
 		// for field, i in rows.Scanner() { ... } // Something along these lines
@@ -237,4 +257,37 @@ func (db *Database) Fetch(query string, args ...interface{}) ([]RowScanner, erro
 	}
 
 	return result, nil
+}
+
+func testWrite(database *Database) {
+	//     UserID INTEGER PRIMARY KEY AUTOINCREMENT,
+	//     DisplayName TEXT UNIQUE NOT NULL,
+	//     CreatedAt TEXT DEFAULT (datetime('now')),
+	//     UpdatedAt TEXT DEFAULT (datetime('now')),
+	//     LastLogin TEXT,
+	//     Role TEXT CHECK(Role IN ('admin', 'user')) DEFAULT 'user',
+	//     FirstName TEXT,
+	//     ProfileImageURL TEXT,
+	//     SessionId TEXT,
+	//     AuthMethodID INTEGER   /* This is a foreign key to the auth_methods table,
+	//
+	today := time.Now().Format("01-02-2006 15:04:05")
+	displayName := "John Doe"
+	user := users.User{
+		DisplayName:     displayName,
+		Role:            "user",
+		LastLogin:       today,
+		FirstName:       "John",
+		ProfileImageUrl: fmt.Sprintf("%s%s%s", "https://picsum.photos/seed/", displayName, "/200/200"),
+		SessionId:       "1234567890",
+		AuthMethodID:    0,
+	}
+
+	data
+}
+
+func testPrintRows(rows []RowScanner) {
+	for _, row := range rows {
+		fmt.Printf("%v\n", row)
+	}
 }
