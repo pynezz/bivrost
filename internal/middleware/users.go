@@ -16,7 +16,7 @@ The user model is not meant to be used for authentication, or marshalling, but r
 
 //  Users table
 // CREATE TABLE users (
-//     UserID INTEGER PRIMARY KEY AUTOINCREMENT,
+//     UserID INTEGER PRIMARY KEY,
 //     DisplayName TEXT UNIQUE NOT NULL,
 //     CreatedAt TEXT DEFAULT (datetime('now')),
 //     UpdatedAt TEXT DEFAULT (datetime('now')),
@@ -85,8 +85,10 @@ func NewUserValidationError(message string) *UserValidationError {
 // because the user in the auth package is used for authentication,
 // and this user is used for user management
 type User struct {
-	UserID          int    `json:"id"` // As of now (13.03.24), this is set by the database. Should be set by bivrost
+	UserID          uint64 `json:"id"` // As of now (13.03.24), this is set by the database. Should be set by bivrost
 	DisplayName     string `json:"displayname"`
+	CreatedAt       string `json:"createdat"`
+	UpdatedAt       string `json:"updatedat"`
 	LastLogin       string `json:"lastlogin"`
 	Role            string `json:"role"`
 	FirstName       string `json:"firstname"`
@@ -202,14 +204,27 @@ type UserQuery interface {
 func GetUserByID(id string) User {
 	// Lookup user id in the database
 	// Return the result as a User struct
-	user := User{}
+	var user User
 
 	// Query the database for the user
-	instance, err := GetDBInstance()
-	if err != nil {
-		util.PrintErrorf("Something has went wrong in the application control flow. Check if the database is ever connected.\nExiting...\n")
+	instance := GetDBInstance()
+	if instance.Driver == nil {
+		return user
 	}
-	instance.Fetch("SELECT * FROM users WHERE UserID = ?", id)
+	err := instance.Driver.QueryRow(
+		`SELECT UserID, DisplayName, CreatedAt,
+		UpdatedAt, LastLogin, Role,
+		FirstName, ProfileImageURL,
+		SessionId, AuthMethodID
+		FROM users WHERE UserID = ?`, id).Scan(
+		&user.UserID, &user.DisplayName, &user.CreatedAt,
+		&user.UpdatedAt, &user.LastLogin, &user.Role,
+		&user.FirstName, &user.ProfileImageUrl,
+		&user.SessionId, &user.AuthMethodID)
+
+	if err != nil {
+		util.PrintError("GetUserByID: " + err.Error())
+	}
 	return user
 }
 

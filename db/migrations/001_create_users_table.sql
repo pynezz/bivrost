@@ -2,7 +2,7 @@
 
 /* SQLite initialization script for the users table */
 CREATE TABLE users (
-    UserID INTEGER PRIMARY KEY AUTOINCREMENT,
+    UserID INTEGER PRIMARY KEY,
     DisplayName TEXT UNIQUE NOT NULL,
     CreatedAt TEXT DEFAULT (datetime('now')),
     UpdatedAt TEXT DEFAULT (datetime('now')),

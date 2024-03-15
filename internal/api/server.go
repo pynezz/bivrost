@@ -8,7 +8,7 @@ import (
 	"github.com/pynezz/bivrost/internal/config"
 	"github.com/pynezz/bivrost/internal/middleware"
 	"github.com/pynezz/bivrost/internal/util"
-	"github.com/pynezz/bivrost/internal/util/crypto"
+	"github.com/pynezz/bivrost/internal/util/cryptoutils"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/logger"
@@ -45,7 +45,7 @@ func NewServer(cfg *config.Cfg) *fiber.App {
 	app.Use(logger.New()) // Log every request
 
 	// Generate a secure secret key for JWT authentication. This shoukld be done for every login request
-	secretKey, err := crypto.GenerateSecretKey() // I know this is not properly implemented, but it's just for testing purposes
+	secretKey, err := cryptoutils.GenerateSecretKey() // I know this is not properly implemented, but it's just for testing purposes
 	if err != nil {
 		log.Fatalf("Error generating secret key: %v", err)
 	}

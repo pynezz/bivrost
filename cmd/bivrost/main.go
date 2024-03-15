@@ -8,7 +8,6 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
-	"github.com/pynezz/bivrost/internal/api"
 	"github.com/pynezz/bivrost/internal/config"
 	"github.com/pynezz/bivrost/internal/fsutil"
 	"github.com/pynezz/bivrost/internal/middleware"
@@ -64,16 +63,27 @@ func main() {
 		util.PrintError("Main function: " + err.Error())
 		return
 	}
+	// database := &middleware.Database{
+	// 	Driver: db,
+	// }
+
+	// middleware.TestWrite(middleware.GetDBInstance())
+
+	// db, err := middleware.InitDatabaseDriver().Connect(cfg.Database.Path)
+	// if err != nil {
+	// 	util.PrintError("Main function: " + err.Error())
+	// 	return
+	// }
 
 	// As stated in the documentation:
 	// 	- It is rare to Close a DB, as the DB handle is meant to be long-lived and shared between many goroutines.
 	// However this is a defer statement, so it will be called when the function returns, which is the end of the main function.
 	// Meaning that the database will be closed when the application is closed.
-	defer db.Close()
+	defer db.Driver.Close()
 
 	// Create the web server
-	app := api.NewServer(cfg)
-	app.Listen(":3000")
+	// app := api.NewServer(cfg)
+	// app.Listen(":3000")
 }
 
 const dbPath = "users.db" // Testing purposes. This should be in the config file

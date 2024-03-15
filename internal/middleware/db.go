@@ -73,15 +73,17 @@ package middleware
 // );
 
 import (
-	"crypto/rand"
 	"database/sql"
 	"fmt"
 	"os"
+	"strconv"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3" // https://pkg.go.dev/github.com/mattn/go-sqlite3#section-readme
 
 	"github.com/pynezz/bivrost/internal/fsutil"
 	"github.com/pynezz/bivrost/internal/util"
+	"github.com/pynezz/bivrost/internal/util/cryptoutils"
 )
 
 // 💡 When creating a new SQLite database or connection to an existing one, with the file name additional options can be given.
@@ -104,38 +106,43 @@ type Execer interface {
 
 // Database defines the structure of the database. We're using SQLite in our project.
 type Database struct {
-	driver *sql.DB
+	Driver *sql.DB
 }
 
-var instance *Database // The global database instance
-var isConnected *bool  // The global database connection status
+var DBInstance *Database
+
+// var instance *Database // The global database instance
+var sqlInstance *sql.DB // The global database connection
 
 // https://gosamples.dev/sqlite-intro/
 
 // NewDatabase creates a new database. It returns a pointer to the database.
 func InitDatabaseDriver(db *sql.DB) *Database {
 	util.PrintInfo("Initializing new database driver...")
-	return &Database{
-		driver: db,
+	DBInstance = &Database{
+		Driver: db,
 	}
+	return DBInstance
 }
 
 func NewDBService() *Database {
-	return &Database{} // TODO: Implement
+	return &Database{
+		Driver: nil,
+	}
 }
 
-func GetDBInstance() (*Database, error) {
+func GetDBInstance() *Database {
 	// TODO: Add some error handling in case the instance is nil.
-	if instance == nil || !*isConnected {
-		return nil, error(util.Errorf(
-			"Database instance is not connected, or is nil. Please connect to the database first via the Connect method."))
+	if DBInstance == nil {
+		util.PrintError("Database instance is not connected, or is nil. Please connect to the database first via the Connect method.")
+		return nil
 	}
 
-	return instance, nil
+	return DBInstance
 }
 
 // Connect to the database
-func (db *Database) Connect(dbPath string) (*sql.DB, error) {
+func (db *Database) Connect(dbPath string) (*Database, error) {
 	util.PrintInfo("Connecting to the database...")
 	// Check if the database file exists
 	if fsutil.FileExists(dbPath) {
@@ -149,19 +156,34 @@ func (db *Database) Connect(dbPath string) (*sql.DB, error) {
 			return nil, err
 		}
 	}
+	util.PrintDebug("Opening the database...")
 	// Open the database
 	driver, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return nil, err
 	}
+	util.PrintSuccess("Database opened.")
 
-	*isConnected, err = db.IsConnected()
+	util.PrintDebug("Verifying connection...")
+	err = driver.Ping()
 	if err != nil {
 		return nil, err
 	}
 
-	db.driver = driver
-	return driver, nil
+	util.PrintSuccess("Connection verified.")
+
+	// Set the global database instance
+	DBInstance = &Database{
+		Driver: driver,
+	}
+
+	db.Driver = driver
+
+	util.PrintDebug("Testing write...")
+	TestWrite(DBInstance)
+
+	testPrintRows(DBInstance)
+	return DBInstance, nil
 }
 
 // Use this function to create a new database from the migration scripts
@@ -191,7 +213,7 @@ func (db *Database) Migrate() error {
 		}
 		util.PrintInfo("Executing migration: " + file)
 
-		_, err = db.driver.Exec(string(query))
+		_, err = db.Driver.Exec(string(query))
 		if err != nil {
 			return err
 		}
@@ -201,7 +223,7 @@ func (db *Database) Migrate() error {
 
 // Check for connectivity with the database
 func (db *Database) IsConnected() (bool, error) {
-	err := db.driver.Ping()
+	err := db.Driver.Ping()
 	return err == nil, err
 }
 
@@ -213,7 +235,7 @@ func (db *Database) IsConnected() (bool, error) {
 //		return err
 //	}
 func (db *Database) Write(query string, args ...interface{}) error {
-	result, err := db.driver.Exec(query, args...)
+	result, err := db.Driver.Exec(query, args...)
 	if err != nil {
 		return err
 	}
@@ -228,37 +250,70 @@ func (db *Database) Write(query string, args ...interface{}) error {
 	return nil
 }
 
-// TODO: Fetch executes a SELECT query and returns the result.
-func (db *Database) Fetch(query string, args ...interface{}) ([]RowScanner, error) {
-	rows, err := db.driver.Query(query, args...)
+// // TODO: Fetch executes a SELECT query and returns the result.
+// func (db *Database) Fetch(query string, args ...interface{}) ([]RowScanner, error) {
+// 	rows, err := db.Driver.Query(query, args...)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	defer rows.Close()
+
+// 	var result []RowScanner
+// 	for rows.Next() {
+// 		var field RowScanner
+// 		err := rows.Scan(&field)
+// 		if err != nil {
+// 			return nil, err
+// 		}
+
+// 		result = append(result, field)
+// 		// Here we need to account for the db structure.
+// 		// var field string
+// 		// for field, i in rows.Scanner() { ... } // Something along these lines
+// 		// result = append(result, &i)	// TODO: Do this properly
+// 	}
+
+// 	if err := rows.Err(); err != nil {
+// 		return nil, err
+// 	}
+
+// 	return result, nil
+// }
+
+func (db *Database) Fetch(query string, args ...interface{}) ([]*User, error) {
+	rows, err := db.Driver.Query(query, args...)
+	util.PrintInfo("Fetched rows: " + fmt.Sprint(rows))
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var result []RowScanner
+	var users []*User
 	for rows.Next() {
-		var field RowScanner
-		err := rows.Scan(&field)
-		if err != nil {
+		var user User
+
+		/* INFO
+		In Go, when working with the database/sql package to scan rows from a query result into a struct,
+		you need to explicitly list each field of the struct as separate arguments to the Scan method.
+		This is because Scan uses reflection to assign the column values to the variables you pass,
+		and it needs to know the exact structure of where to put each column's data.*/
+
+		// Scan copies the columns in the current row into the values pointed at by dest.
+		// The number of values in dest must be the same as the number of columns in Rows.
+		if err := rows.Scan(&user.UserID, &user.DisplayName, &user.CreatedAt, &user.UpdatedAt, &user.LastLogin, &user.Role, &user.FirstName, &user.ProfileImageUrl, &user.SessionId, &user.AuthMethodID); err != nil {
 			return nil, err
 		}
-
-		result = append(result, field)
-		// Here we need to account for the db structure.
-		// var field string
-		// for field, i in rows.Scanner() { ... } // Something along these lines
-		// result = append(result, &i)	// TODO: Do this properly
+		users = append(users, &user)
 	}
 
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 
-	return result, nil
+	return users, nil
 }
 
-func testWrite(database *Database) {
+func TestWrite(database *Database) {
 	//     UserID INTEGER PRIMARY KEY AUTOINCREMENT,
 	//     DisplayName TEXT UNIQUE NOT NULL,
 	//     CreatedAt TEXT DEFAULT (datetime('now')),
@@ -273,8 +328,15 @@ func testWrite(database *Database) {
 	// today := time.Now().Format("01-02-2006 15:04:05")
 	displayName := "John Doe"
 
-	// Generate a random 32-bit integer
-	randomID := rand.Int31n(1000000)
+	// Generate a cryptographically secure random 32-bit integer
+	var randomID uint64
+	randomID, err := cryptoutils.GenerateRandomInt(1000000, 10000000) // I know I shouldn't have hardcoded these...
+	util.PrintDebug("Generated random ID: " + strconv.Itoa(int(randomID)))
+	if err != nil {
+		util.PrintError(err.Error())
+	}
+
+	today := time.Now().Format("01-02-2006 15:04:05")
 
 	profileImageUrl := PlaceholderImage{
 		Width:  200,
@@ -282,28 +344,47 @@ func testWrite(database *Database) {
 		Text:   displayName,
 	}
 
+	userId := randomID
+
 	u := User{
-		UserID:      int(randomID),
-		DisplayName: displayName,
-		// CreatedAt:   string(today),
-		// UpdatedAt:   today,
+		UserID:          userId,
+		DisplayName:     displayName + fmt.Sprintf("%s%s", ":", strconv.FormatUint(userId, 10)[:3]),
+		CreatedAt:       today,
+		UpdatedAt:       today,
+		LastLogin:       today,
 		Role:            "user",
 		FirstName:       "John",
 		ProfileImageUrl: GetPlaceholderImage(profileImageUrl),
-		// SessionId:       rand.Int(10, 32),
-		AuthMethodID: 1,
+		SessionId:       "123",
+		AuthMethodID:    0,
 	}
 
-	err := database.Write("INSERT INTO users (UserID, DisplayName, CreatedAt, UpdatedAt, Role, FirstName, ProfileImageURL, SessionId, AuthMethodID) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		u.UserID, u.DisplayName, u.CreatedAt, u.UpdatedAt, u.Role, u.FirstName, u.ProfileImageURL, u.SessionId, u.AuthMethodID)
+	err = database.Write(`INSERT INTO users (
+		UserID, DisplayName, CreatedAt,
+		UpdatedAt, LastLogin, Role,
+		FirstName, ProfileImageURL,
+		SessionId, AuthMethodID) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		u.UserID, u.DisplayName, u.CreatedAt,
+		u.UpdatedAt, u.LastLogin, u.Role,
+		u.FirstName, u.ProfileImageUrl,
+		u.SessionId, u.AuthMethodID)
 	if err != nil {
 		util.PrintError(err.Error())
 	}
 
+	testPrintRows(database)
 }
 
-func testPrintRows(rows []RowScanner) {
-	for _, row := range rows {
-		fmt.Printf("%v\n", row)
+func testPrintRows(db *Database) {
+	util.PrintDebug("Fetching all users...")
+	users, err := db.Fetch("SELECT * FROM users")
+	if err != nil {
+		fmt.Println("Error fetching users:", err)
+		return
+	}
+	util.PrintInfo("Found users: " + fmt.Sprint(len(users)))
+
+	for _, user := range users {
+		fmt.Printf("%+v\n", user)
 	}
 }
