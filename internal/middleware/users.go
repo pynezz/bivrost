@@ -1,7 +1,11 @@
 package middleware
 
 import (
+	"fmt"
+	"net/url"
+	"reflect"
 	"strconv"
+	"strings"
 
 	"github.com/pynezz/bivrost/internal/util"
 )
@@ -81,11 +85,9 @@ func NewUserValidationError(message string) *UserValidationError {
 	return &UserValidationError{Description: message}
 }
 
-// I need a separate kind of user for this package,
-// because the user in the auth package is used for authentication,
-// and this user is used for user management
+// This user will be sent back to the server, and then to the client as a JSON object
 type User struct {
-	UserID          uint64 `json:"id"` // As of now (13.03.24), this is set by the database. Should be set by bivrost
+	UserID          uint64 `json:"id"` // As of now (13.03.24), this is set by the database. Should be set by bivrost. -[15.03.24]This is now fixed.
 	DisplayName     string `json:"displayname"`
 	CreatedAt       string `json:"createdat"`
 	UpdatedAt       string `json:"updatedat"`
@@ -122,7 +124,7 @@ type CreateUserResponse struct {
 // password: The password of the user
 // role: The role of the user
 // firstname: The first name of the user
-// profileimageurl: The profile image URL of the user
+// profileimageurl: The profile image URL of the user (NOT required)
 // sessionid: The session ID of the user
 // authmethodid: The authentication method ID of the user (0 = password, 1 = webauthn)
 func NewUser(
@@ -152,24 +154,33 @@ func NewUser(
 func ValidateNewUser(user CreateUserRequest) (bool, []error) {
 	var err []error // In case we got multiple validation errors
 
-	switch {
-	case user.DisplayName == "":
+	if user.DisplayName == "" {
 		err = append(err, NewUserValidationError("Display name is required"))
 		// I want to keep going with the validation, even if one of the fields is invalid
 		// So I'm not returning here, but rather appending the error to the err slice
-
-	case len(user.Password) < 12:
-		err = append(err, NewUserValidationError("Password must be at least 12 characters long"))
-	case user.Role != "admin" && user.Role != "user":
-		err = append(err, NewUserValidationError("Invalid role. Should be 'admin' or 'user'"))
-	case user.ProfileImageUrl == "":
-		err = append(err, NewUserValidationError("Profile image URL is required"))
-	default:
-		return true, nil
 	}
+	if user.Password == "" {
+		err = append(err, NewUserValidationError("Password is required"))
+	}
+	if len(user.Password) < 12 {
+		err = append(err, NewUserValidationError("Password must be at least 12 characters long"))
+	}
+	if user.Role != "admin" && user.Role != "user" {
+		err = append(err, NewUserValidationError("Invalid role. Should be 'admin' or 'user'"))
+	}
+	if user.ProfileImageUrl == "" {
+		p := PlaceholderImage{
+			Width:  200,
+			Height: 200,
+			Text:   user.DisplayName,
+		}
+		user.ProfileImageUrl = GetPlaceholderImage(p)
+	}
+
 	return false, err
 }
 
+// [!] Not sure if this is going to be neeeded. Better fit in auth.go
 func ValidateUserPasswordAuth(userAuth PasswordAuth) (bool, []error) {
 	var err []error
 
@@ -201,6 +212,9 @@ type UserQuery interface {
 }
 
 // Important to note: https://go.dev/doc/database/sql-injection
+// TODO: Probably best to use something else. Important to keep in mind that this is a potential security risk
+// If we get this ID from the client, we need to ensure its integrity by validating it in a JWT token, or something
+// We'll see if it's necessary to implement this
 func GetUserByID(id string) User {
 	// Lookup user id in the database
 	// Return the result as a User struct
@@ -228,11 +242,32 @@ func GetUserByID(id string) User {
 	return user
 }
 
+// Will return a user with id 0 if the user is not found
 func GetUserByDisplayName(displayname string) User {
 	// Lookup user display name in the database
 	// Return the result as a User struct
+	var user User
+	user.UserID = 0
 
-	user := User{}
+	// Query the database for the user
+	instance := GetDBInstance()
+	if instance.Driver == nil {
+		return user
+	}
+	err := instance.Driver.QueryRow(
+		`SELECT UserID, DisplayName, CreatedAt,
+		UpdatedAt, LastLogin, Role,
+		FirstName, ProfileImageURL,
+		SessionId, AuthMethodID
+		FROM users WHERE DisplayName = ?`, displayname).Scan( // Would be nice to have a function for this
+		&user.UserID, &user.DisplayName, &user.CreatedAt,
+		&user.UpdatedAt, &user.LastLogin, &user.Role,
+		&user.FirstName, &user.ProfileImageUrl,
+		&user.SessionId, &user.AuthMethodID)
+
+	if err != nil {
+		util.PrintError("GetUserByDisplayName: " + err.Error())
+	}
 	return user
 }
 
@@ -269,37 +304,80 @@ type PlaceholderImage struct {
 	TextWrap   bool
 }
 
+// // GetPlaceholderImage returns a URL to a placeholder image
+// func GetPlaceholderImage(params PlaceholderImage) string {
+// 	// Make a request to the placeholders.dev API
+// 	// Return the image as a byte array
+
+// 	url := "https://images.placeholders.dev/"
+
+// 	switch {
+// 	case params.Width != 0:
+// 		url += "?width=" + strconv.Itoa(params.Width)
+// 		util.PrintDebug("url: " + url)
+
+// 	case params.Height != 0:
+// 		url += "&height=" + strconv.Itoa(params.Height)
+// 		util.PrintDebug("url: " + url)
+// 	case params.Text != "":
+// 		url += "&text=" + params.Text
+// 	case params.FontFamily != "":
+// 		url += "&fontFamily=" + params.FontFamily
+// 	case params.FontWeight != "":
+// 		url += "&fontWeight=" + params.FontWeight
+// 	case params.FontSize != "":
+// 		url += "&fontSize=" + params.FontSize
+// 	case params.Dy != "":
+// 		url += "&dy=" + params.Dy
+// 	case params.BgColor != "":
+// 		url += "&bgColor=" + params.BgColor
+// 	case params.TextColor != "":
+// 		url += "&textColor=" + params.TextColor
+// 	case params.TextWrap:
+// 		url += "&textWrap=" + strconv.FormatBool(params.TextWrap)
+// 	default:
+// 		url += ""
+// 	}
+
+// 	util.PrintDebug("Placeholder image URL: " + url)
+
+// 	return url
+// }
+
 // GetPlaceholderImage returns a URL to a placeholder image
 func GetPlaceholderImage(params PlaceholderImage) string {
-	// Make a request to the placeholders.dev API
-	// Return the image as a byte array
+	baseURL := "https://images.placeholders.dev/"
 
-	url := "https://images.placeholders.dev/"
+	// Use url.Values to properly encode query parameters
+	v := url.Values{}
 
-	switch {
-	case params.Width != 0:
-		url += "?width=" + string(params.Width)
-	case params.Height != 0:
-		url += "&height=" + string(params.Height)
-	case params.Text != "":
-		url += "&text=" + params.Text
-	case params.FontFamily != "":
-		url += "&fontFamily=" + params.FontFamily
-	case params.FontWeight != "":
-		url += "&fontWeight=" + params.FontWeight
-	case params.FontSize != "":
-		url += "&fontSize=" + params.FontSize
-	case params.Dy != "":
-		url += "&dy=" + params.Dy
-	case params.BgColor != "":
-		url += "&bgColor=" + params.BgColor
-	case params.TextColor != "":
-		url += "&textColor=" + params.TextColor
-	case params.TextWrap:
-		url += "&textWrap=" + strconv.FormatBool(params.TextWrap)
-	default:
-		url += ""
+	// Reflect on the struct to dynamically read field names and values
+	val := reflect.ValueOf(params)
+	for i := 0; i < val.NumField(); i++ {
+		field := val.Type().Field(i)
+		value := val.Field(i)
+
+		// Convert each field to a corresponding query parameter
+		switch value.Kind() {
+		case reflect.Int:
+			if value.Int() != -1 { // We'll use -1 as a "null" value
+				// The key needs to be lowercase hence the strings.ToLower(field.Name)
+				// We can't set it in lowercase by default because it's exported, and public fields need to be capitalized in Go
+				v.Add(strings.ToLower(field.Name), strconv.FormatInt(value.Int(), 10))
+			}
+		case reflect.String:
+			if value.String() != "" {
+				v.Add(strings.ToLower(field.Name), value.String())
+			}
+		case reflect.Bool:
+			v.Add(strings.ToLower(field.Name), strconv.FormatBool(value.Bool()))
+		}
 	}
 
-	return url
+	// Append encoded query parameters to the base URL
+	urlWithParams := baseURL + "?" + v.Encode()
+
+	fmt.Println("Placeholder image URL: " + urlWithParams)
+
+	return urlWithParams
 }

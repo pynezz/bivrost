@@ -8,6 +8,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
+	"github.com/pynezz/bivrost/internal/api"
 	"github.com/pynezz/bivrost/internal/config"
 	"github.com/pynezz/bivrost/internal/fsutil"
 	"github.com/pynezz/bivrost/internal/middleware"
@@ -82,8 +83,8 @@ func main() {
 	defer db.Driver.Close()
 
 	// Create the web server
-	// app := api.NewServer(cfg)
-	// app.Listen(":3000")
+	app := api.NewServer(cfg)
+	app.Listen(":3000")
 }
 
 const dbPath = "users.db" // Testing purposes. This should be in the config file

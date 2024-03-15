@@ -104,6 +104,18 @@ type Execer interface {
 	Exec(query string, args ...interface{}) (sql.Result, error)
 }
 
+type Tables struct {
+	Users        string
+	AuthMethods  string
+	UserSessions string
+	WebAuthnAuth string
+	PasswordAuth string
+}
+
+func (t *Tables) GetTables() []string {
+	return []string{t.Users, t.AuthMethods, t.UserSessions, t.WebAuthnAuth, t.PasswordAuth}
+}
+
 // Database defines the structure of the database. We're using SQLite in our project.
 type Database struct {
 	Driver *sql.DB
@@ -280,37 +292,14 @@ func (db *Database) Write(query string, args ...interface{}) error {
 // 	return result, nil
 // }
 
-func (db *Database) Fetch(query string, args ...interface{}) ([]*User, error) {
+func (db *Database) Fetch(query string, args ...interface{}) (*sql.Rows, error) {
 	rows, err := db.Driver.Query(query, args...)
 	util.PrintInfo("Fetched rows: " + fmt.Sprint(rows))
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	var users []*User
-	for rows.Next() {
-		var user User
-
-		/* INFO
-		In Go, when working with the database/sql package to scan rows from a query result into a struct,
-		you need to explicitly list each field of the struct as separate arguments to the Scan method.
-		This is because Scan uses reflection to assign the column values to the variables you pass,
-		and it needs to know the exact structure of where to put each column's data.*/
-
-		// Scan copies the columns in the current row into the values pointed at by dest.
-		// The number of values in dest must be the same as the number of columns in Rows.
-		if err := rows.Scan(&user.UserID, &user.DisplayName, &user.CreatedAt, &user.UpdatedAt, &user.LastLogin, &user.Role, &user.FirstName, &user.ProfileImageUrl, &user.SessionId, &user.AuthMethodID); err != nil {
-			return nil, err
-		}
-		users = append(users, &user)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	return users, nil
+	return rows, nil
 }
 
 func TestWrite(database *Database) {
@@ -348,7 +337,7 @@ func TestWrite(database *Database) {
 
 	u := User{
 		UserID:          userId,
-		DisplayName:     displayName + fmt.Sprintf("%s%s", ":", strconv.FormatUint(userId, 10)[:3]),
+		DisplayName:     displayName + fmt.Sprintf("%s%s", "#", strconv.FormatUint(userId, 10)[:3]),
 		CreatedAt:       today,
 		UpdatedAt:       today,
 		LastLogin:       today,
@@ -368,6 +357,7 @@ func TestWrite(database *Database) {
 		u.UpdatedAt, u.LastLogin, u.Role,
 		u.FirstName, u.ProfileImageUrl,
 		u.SessionId, u.AuthMethodID)
+
 	if err != nil {
 		util.PrintError(err.Error())
 	}
@@ -377,7 +367,31 @@ func TestWrite(database *Database) {
 
 func testPrintRows(db *Database) {
 	util.PrintDebug("Fetching all users...")
-	users, err := db.Fetch("SELECT * FROM users")
+	rows, err := db.Fetch("SELECT * FROM users")
+
+	var users []User
+	for rows.Next() {
+		var user User
+
+		/* INFO
+		In Go, when working with the database/sql package to scan rows from a query result into a struct,
+		you need to explicitly list each field of the struct as separate arguments to the Scan method.
+		This is because Scan uses reflection to assign the column values to the variables you pass,
+		and it needs to know the exact structure of where to put each column's data.*/
+
+		// Scan copies the columns in the current row into the values pointed at by dest.
+		// The number of values in dest must be the same as the number of columns in Rows.
+		if err := rows.Scan(&user.UserID, &user.DisplayName, &user.CreatedAt, &user.UpdatedAt, &user.LastLogin, &user.Role, &user.FirstName, &user.ProfileImageUrl, &user.SessionId, &user.AuthMethodID); err != nil {
+			util.PrintError("Error scanning rows: " + err.Error())
+		}
+		users = append(users, user)
+	}
+
+	if err := rows.Err(); err != nil {
+		util.PrintError("Error fetching rows: " + err.Error())
+	}
+	defer rows.Close()
+
 	if err != nil {
 		fmt.Println("Error fetching users:", err)
 		return

@@ -1,6 +1,7 @@
 package middleware // Could maybe rename to handlers
 
 import (
+	"encoding/base64"
 	"fmt"
 	"strings"
 	"time"
@@ -77,6 +78,12 @@ type PasswordAuth struct {
 	PasswordHash string
 }
 
+type LoginRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+	Base64   string `json:"base64"`
+}
+
 // Bouncer is a middleware that checks if the user is authenticated.
 func Bouncer(secretKey string) fiber.Handler {
 	return func(c *fiber.Ctx) error {
@@ -143,11 +150,76 @@ func GenerateToken(userID, secretKey string) (string, error) {
 	return signedToken, nil
 }
 
+func Base64Decode(b string) string {
+	// Decode the base64 string
+	base64Decoded, err := base64.StdEncoding.DecodeString(b)
+	if err != nil {
+		util.PrintError("Error decoding base64 string: " + err.Error())
+	}
+
+	// Print the decoded string
+	util.PrintSuccess("Base64 decoded: " + string(base64Decoded))
+	return string(base64Decoded)
+}
+
 // These functions are inspired from: https://github.com/go-webauthn/webauthn?tab=readme-ov-file#logging-into-an-account
-// TODO: Implement the login process
-func BeginLogin() {
+func BeginLogin(c *fiber.Ctx) error { // TODO: Figure out if it's best to use the context, or the app instance
+
+	var loginReq LoginRequest
+	if err := c.BodyParser(&loginReq); err != nil {
+		util.PrintError("Error parsing login request: " + err.Error())
+		return c.Status(fiber.StatusBadRequest).SendString("Invalid request")
+	}
+
+	util.PrintDebug("Got a POST request to /login")
+	username := loginReq.Username
+	if username == "" {
+		return c.Status(fiber.StatusBadRequest).SendString("Invalid request")
+	}
+
+	util.PrintSuccess("Username: " + username)
+
+	// If the base64 field is non-empty, we want to parse it:
+	if loginReq.Base64 != "" {
+		// Decode the base64 string
+		base64Decoded, err := base64.StdEncoding.DecodeString(loginReq.Base64)
+		if err != nil {
+			util.PrintError("Error decoding base64 string: " + err.Error())
+			return c.Status(fiber.StatusBadRequest).SendString("Invalid request")
+		}
+
+		// Print the decoded string
+		util.PrintSuccess("Base64 decoded: " + string(base64Decoded))
+	}
+
+	user := GetUserByDisplayName(username)
+	if user.UserID == 0 {
+		return c.Status(fiber.StatusUnauthorized).SendString("Invalid credentials")
+	}
+
+	// Now we need to update last login time
+	// UpdateLastLoginTime(username)
+
+	// We also need to consider what to look for in the database when the user logs in.
+	// It might be hard to remember their username and their three digits
+
+	// Return a welcome message
+	return c.Status(fiber.StatusOK).SendString("Welcome, " + username + "\nYour last login was " + user.LastLogin)
+
+	// c.App().Post("/login", func(lctx *fiber.Ctx) error {
+	// 	util.PrintDebug("Got a POST request to /login")
+	// 	username := lctx.Params("username")
+	// 	if username == "" {
+	// 		return lctx.SendStatus(fiber.StatusBadRequest)
+	// 	}
+
+	// 	util.PrintSuccess("Username: " + username)
+	// 	return c.Next()
+	// })
+
 	// General overview:
 	// 1. Check if the user is already logged in by checking for a JWT token
+	// (This is already done by the Bouncer)
 	//   a) If the token is valid, just return a message to the hydrator(?) that the user is already logged in
 	// 2. If the user is not logged in (i.e. the token is invalid), prompt the user to log in
 	//   a) The username and password/fido2 credentials are received

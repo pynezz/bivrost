@@ -89,6 +89,7 @@ func setupRoutes(app *fiber.App, cfg *config.Cfg) {
 
 	config.WriteConfig(cfg, "config.yaml")
 
+	// For the ThreatIntel module
 	app.Post("/api/v1/intel/", func(c *fiber.Ctx) error {
 		c.AcceptsEncodings("application/json")
 		payload := new(IntelRequest)
@@ -99,6 +100,7 @@ func setupRoutes(app *fiber.App, cfg *config.Cfg) {
 		return c.JSON(payload)
 	})
 
+	// Auth route
 	app.Get("/auth/:id", func(c *fiber.Ctx) error {
 		q := c.Queries()
 		fmt.Println("[i] Query parameters")
@@ -127,6 +129,14 @@ func setupRoutes(app *fiber.App, cfg *config.Cfg) {
 
 		return c.SendStatus(fiber.StatusUnauthorized)
 	})
+
+	app.Post("/login", middleware.BeginLogin)
+
+	// app.Post("/login", middleware.BeginLogin /*handleAuth*/, func(c *fiber.Ctx) error {
+	// 	// Get the username and password from the request body
+	// 	username := c.FormValue("username")
+	// 	password := c.FormValue("password")
+	// }, middleware.BeginLogin(c))
 
 	// Threat Intel API routes
 	// app.Get("/api/v1/threats", getThreatsHandler)
