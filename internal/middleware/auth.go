@@ -3,12 +3,14 @@ package middleware // Could maybe rename to handlers
 import (
 	"encoding/base64"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/pynezz/bivrost/internal/util"
+	"github.com/pynezz/bivrost/internal/util/cryptoutils"
 )
 
 // Claims defines the structure of the JWT claims.
@@ -82,6 +84,20 @@ type LoginRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 	Base64   string `json:"base64"`
+}
+
+type PasswordRegisterRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+type WebAuthnRegisterRequest struct {
+	CredentialID     string    `json:"credentialId"`
+	UserID           int       `json:"userId"`
+	PublicKey        string    `json:"publicKey"`
+	UserHandle       string    `json:"userHandle"`
+	SignatureCounter int       `json:"signatureCounter"`
+	CreatedAt        time.Time `json:"createdAt"`
 }
 
 // Bouncer is a middleware that checks if the user is authenticated.
@@ -204,7 +220,13 @@ func BeginLogin(c *fiber.Ctx) error { // TODO: Figure out if it's best to use th
 	// It might be hard to remember their username and their three digits
 
 	// Return a welcome message
-	return c.Status(fiber.StatusOK).SendString("Welcome, " + username + "\nYour last login was " + user.LastLogin)
+	resultstring := fmt.Sprintf(
+		"Welcome, %s\nYour last login was %s\nUserID: %d\nFull username: %s\nAuth method: %d\n",
+		user.DisplayName[0:len(user.DisplayName)-4],
+		user.LastLogin,
+		user.UserID, user.DisplayName, user.AuthMethodID)
+
+	return c.Status(fiber.StatusOK).SendString(resultstring)
 
 	// c.App().Post("/login", func(lctx *fiber.Ctx) error {
 	// 	util.PrintDebug("Got a POST request to /login")
@@ -239,9 +261,115 @@ func FinishLogin() {
 	// Implement
 }
 
-// TODO: Implement the registration process
-func BeginRegistration() {
-	// Implement
+// TODO: Finish the registration process
+func BeginRegistration(c *fiber.Ctx) error {
+	var regReq PasswordRegisterRequest
+	if err := c.BodyParser(&regReq); err != nil {
+		util.PrintError("Error parsing registration request: " + err.Error())
+		return c.Status(fiber.StatusBadRequest).SendString("Invalid request")
+	}
+
+	util.PrintDebug("Got a POST request to /register")
+	username := regReq.Username
+	if username == "" {
+		return c.Status(fiber.StatusBadRequest).SendString("Invalid request")
+	}
+
+	util.PrintSuccess("Username: " + username)
+
+	var tempUser User
+	tempUser.DisplayName = username
+	tempUser.AuthMethodID = 1 // Password
+	tempUser.LastLogin = time.Now().Format("2006-01-02 15:04:05")
+
+	// Insert the user into the database
+	db := GetDBInstance()
+	displayName := getRandomName()
+
+	// Generate a cryptographically secure random 32-bit integer
+	var randomID uint64
+	randomID, err := cryptoutils.GenerateRandomInt(1000000, 10000000) // I know I shouldn't have hardcoded these...
+	util.PrintDebug("Generated random ID: " + strconv.Itoa(int(randomID)) + " for user " + displayName)
+	if err != nil {
+		util.PrintError(err.Error())
+	}
+
+	today := time.Now().Format("01-02-2006 15:04:05")
+
+	profileImageUrl := PlaceholderImage{
+		Width:  200,
+		Height: 200,
+		Text:   displayName,
+	}
+
+	userId := randomID
+
+	// Session id is a combination of the last 10 digits in the current time in nanoseconds + the user ID
+	// We could then hash this in some magical way to make it tamper proof by checking the last login time
+	// and the session id
+	// sessionId := time.Now() * time.Nanosecond + strconv.FormatUint(userId, 10)
+	sessionId := time.UnixDate + strconv.FormatUint(userId, 10)
+	util.PrintDebug("Generated session ID: " + sessionId)
+
+	u := User{
+		UserID:          userId,
+		DisplayName:     displayName + fmt.Sprintf("%s%s", "#", strconv.FormatUint(userId, 10)[:3]),
+		CreatedAt:       today,
+		UpdatedAt:       today,
+		LastLogin:       today,
+		Role:            "user",
+		FirstName:       "John",
+		ProfileImageUrl: GetPlaceholderImage(profileImageUrl),
+		SessionId:       sessionId,
+		AuthMethodID:    1, // 3 = Password + WebAuthn
+	}
+
+	err = db.Write(`INSERT INTO users (
+		UserID, DisplayName, CreatedAt,
+		UpdatedAt, LastLogin, Role,
+		FirstName, ProfileImageURL,
+		SessionId, AuthMethodID) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		u.UserID, u.DisplayName, u.CreatedAt,
+		u.UpdatedAt, u.LastLogin, u.Role,
+		u.FirstName, u.ProfileImageUrl,
+		u.SessionId, u.AuthMethodID)
+
+	if err != nil {
+		util.PrintError(err.Error())
+	}
+
+	// Insert password hash into the password_auth table
+
+	p := &params{
+		memory:      64 * 1024,
+		iterations:  3,
+		parallelism: 2,
+		saltLength:  16,
+		keyLength:   32, // AES256 compatible key length
+	}
+
+	_, encodedHash, err := generateFromPassword(regReq.Password, p)
+	if err != nil {
+		util.PrintError("Error generating password hash: " + err.Error())
+		return c.Status(fiber.StatusInternalServerError).SendString("Internal server error")
+	}
+
+	util.PrintSuccess("Generated encoded hash: " + encodedHash)
+
+	// Insert the password hash into the password_auth table
+	err = db.Write(`INSERT INTO password_auth (UserID, Enabled, PasswordHash) VALUES (?, ?, ?)`,
+		u.UserID, true, encodedHash)
+	if err != nil {
+		util.PrintError("Error inserting password hash into the database: " + err.Error())
+		return c.Status(fiber.StatusInternalServerError).SendString("Internal server error")
+	}
+
+	// Generate a JWT token
+
+	// Return register success
+	return c.Status(fiber.StatusOK).SendString("Registration successful")
+
+	// ValidateUserPasswordAuth()
 
 }
 

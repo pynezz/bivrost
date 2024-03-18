@@ -302,6 +302,49 @@ func (db *Database) Fetch(query string, args ...interface{}) (*sql.Rows, error) 
 	return rows, nil
 }
 
+var RandomFirstName []string = []string{
+	"John",
+	"Jane",
+	"Michael",
+	"Sarah",
+	"David",
+	"Emily",
+	"Daniel",
+	"Olivia",
+	"James",
+	"Emma",
+	"Benjamin",
+	"Isabella",
+	"Lucas",
+	"Sophia",
+	"Alexander",
+	"Mia",
+	"William",
+	"Charlotte",
+}
+
+var RandomLastName []string = []string{
+	"Smith",
+	"Johnson",
+	"Williams",
+	"Brown",
+	"Jones",
+	"Garcia",
+	"Miller",
+	"Davis",
+	"Rodriguez",
+	"Martinez",
+	"Hernandez",
+	"Lopez",
+	"Gonzalez",
+	"Wilson",
+	"Anderson",
+	"Thomas",
+	"Taylor",
+	"Moore",
+	"Jackson",
+}
+
 func TestWrite(database *Database) {
 	//     UserID INTEGER PRIMARY KEY AUTOINCREMENT,
 	//     DisplayName TEXT UNIQUE NOT NULL,
@@ -315,7 +358,8 @@ func TestWrite(database *Database) {
 	//     AuthMethodID INTEGER   /* This is a foreign key to the auth_methods table,
 	//
 	// today := time.Now().Format("01-02-2006 15:04:05")
-	displayName := "John Doe"
+
+	displayName := getRandomName()
 
 	// Generate a cryptographically secure random 32-bit integer
 	var randomID uint64
@@ -401,4 +445,17 @@ func testPrintRows(db *Database) {
 	for _, user := range users {
 		fmt.Printf("%+v\n", user)
 	}
+}
+
+func getRandomName() string {
+	randFNameIndex, err := cryptoutils.GenerateRandomInt(0, len(RandomFirstName))
+	if err != nil {
+		util.PrintError(err.Error())
+	}
+	randLNameIndex, err := cryptoutils.GenerateRandomInt(0, len(RandomLastName))
+	if err != nil {
+		util.PrintError(err.Error())
+	}
+
+	return RandomFirstName[randFNameIndex] + " " + RandomLastName[randLNameIndex]
 }

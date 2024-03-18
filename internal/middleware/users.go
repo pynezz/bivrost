@@ -211,6 +211,55 @@ type UserQuery interface {
 	GetUserByDisplayName(displayname string) User
 }
 
+// Just helpers to not have to remember the column names and to avoid typos
+// UC = User Column. Column names in the user database. Not sure if this is the Go way of doing it
+const (
+	UCId           string = "UserID"
+	UCDisplayName  string = "DisplayName"
+	UCRole         string = "Role"
+	UCFirstName    string = "FirstName"
+	UCCreatedAt    string = "CreatedAt"
+	UCUpdatedAt    string = "UpdatedAt"
+	UCLastLogin    string = "LastLogin"
+	UCProfileUrl   string = "ProfileImageURL"
+	UCSessionId    string = "SessionId"
+	UCAuthMethodId string = "AuthMethodID"
+
+	// User column operators, maybe not necessary
+	UCeq        string = "="
+	UCneq       string = "!="
+	UClt        string = "<"
+	UClte       string = "<="
+	UCgt        string = ">"
+	UCgte       string = ">="
+	UClike      string = "LIKE"
+	UCin        string = "IN"
+	UCnotin     string = "NOT IN"
+	UCand       string = "AND"
+	UCor        string = "OR"
+	UCnot       string = "NOT"
+	UCisnull    string = "IS NULL"
+	UCisnotnull string = "IS NOT NULL"
+)
+
+// To be used in conjuction with a QueryRow such that the column is passed as a parameter,
+// and the value is passed as another parameter
+// Example: SELECT * FROM users WHERE <column> = ?
+// The first ? is the column, and the second ? is the value
+func (d *Database) SelectColEq(col string) string {
+	return fmt.Sprintf(`SELECT UserID, DisplayName, CreatedAt, UpdatedAt, LastLogin, Role,
+		FirstName, ProfileImageURL,
+		SessionId, AuthMethodID
+		FROM users WHERE %s = ?`, col)
+}
+
+func (d *Database) SelectCol(col string, operator string) string {
+	return fmt.Sprintf(`SELECT UserID, DisplayName, CreatedAt, UpdatedAt, LastLogin, Role,
+		FirstName, ProfileImageURL,
+		SessionId, AuthMethodID
+		FROM users WHERE %s %s ?`, col, operator)
+}
+
 // Important to note: https://go.dev/doc/database/sql-injection
 // TODO: Probably best to use something else. Important to keep in mind that this is a potential security risk
 // If we get this ID from the client, we need to ensure its integrity by validating it in a JWT token, or something
@@ -225,16 +274,24 @@ func GetUserByID(id string) User {
 	if instance.Driver == nil {
 		return user
 	}
-	err := instance.Driver.QueryRow(
-		`SELECT UserID, DisplayName, CreatedAt,
-		UpdatedAt, LastLogin, Role,
-		FirstName, ProfileImageURL,
-		SessionId, AuthMethodID
-		FROM users WHERE UserID = ?`, id).Scan(
-		&user.UserID, &user.DisplayName, &user.CreatedAt,
-		&user.UpdatedAt, &user.LastLogin, &user.Role,
-		&user.FirstName, &user.ProfileImageUrl,
-		&user.SessionId, &user.AuthMethodID)
+	// err := instance.Driver.QueryRow(
+	// 	`SELECT UserID, DisplayName, CreatedAt,
+	// 	UpdatedAt, LastLogin, Role,
+	// 	FirstName, ProfileImageURL,
+	// 	SessionId, AuthMethodID
+	// 	FROM users WHERE UserID = ?`, id).Scan(
+	// 	&user.UserID, &user.DisplayName, &user.CreatedAt,
+	// 	&user.UpdatedAt, &user.LastLogin, &user.Role,
+	// 	&user.FirstName, &user.ProfileImageUrl,
+	// 	&user.SessionId, &user.AuthMethodID)
+
+	err := instance.Driver.QueryRow(instance.SelectColEq(UCId), id).
+		Scan(
+			&user.UserID, &user.DisplayName, &user.CreatedAt,
+			&user.UpdatedAt, &user.LastLogin, &user.Role,
+			&user.FirstName, &user.ProfileImageUrl,
+			&user.SessionId, &user.AuthMethodID,
+		)
 
 	if err != nil {
 		util.PrintError("GetUserByID: " + err.Error())
@@ -242,8 +299,10 @@ func GetUserByID(id string) User {
 	return user
 }
 
+// GetUserByDisplayName returns a user with the given display name
 // Will return a user with id 0 if the user is not found
-func GetUserByDisplayName(displayname string) User {
+func GetUserByDisplayName(displayname string) User { // Displayname is used to login
+
 	// Lookup user display name in the database
 	// Return the result as a User struct
 	var user User
@@ -254,24 +313,81 @@ func GetUserByDisplayName(displayname string) User {
 	if instance.Driver == nil {
 		return user
 	}
-	err := instance.Driver.QueryRow(
-		`SELECT UserID, DisplayName, CreatedAt,
-		UpdatedAt, LastLogin, Role,
-		FirstName, ProfileImageURL,
-		SessionId, AuthMethodID
-		FROM users WHERE DisplayName = ?`, displayname).Scan( // Would be nice to have a function for this
-		&user.UserID, &user.DisplayName, &user.CreatedAt,
-		&user.UpdatedAt, &user.LastLogin, &user.Role,
-		&user.FirstName, &user.ProfileImageUrl,
-		&user.SessionId, &user.AuthMethodID)
+	// err := instance.Driver.QueryRow(
+	// 	`SELECT UserID, DisplayName, CreatedAt,
+	// 	UpdatedAt, LastLogin, Role,
+	// 	FirstName, ProfileImageURL,
+	// 	SessionId, AuthMethodID
+	// 	FROM users WHERE DisplayName = ?`, displayname).Scan( // Would be nice to have a function for this
+	// 	&user.UserID, &user.DisplayName, &user.CreatedAt,
+	// 	&user.UpdatedAt, &user.LastLogin, &user.Role,
+	// 	&user.FirstName, &user.ProfileImageUrl,
+	// 	&user.SessionId, &user.AuthMethodID)
+
+	// Will find any user that has the display name provided, and with any three digits
+	// SELECT * FROM users WHERE DisplayName LIKE 'displayname%'
+
+	util.PrintDebug("SelectCol: " + instance.SelectCol(UCDisplayName, UClike) + displayname + "#" + "%")
+
+	err := instance.Driver.QueryRow(instance.SelectCol(UCDisplayName, UClike), displayname+"#"+"%").
+		Scan(
+			&user.UserID, &user.DisplayName, &user.CreatedAt,
+			&user.UpdatedAt, &user.LastLogin, &user.Role,
+			&user.FirstName, &user.ProfileImageUrl,
+			&user.SessionId, &user.AuthMethodID,
+		)
 
 	if err != nil {
 		util.PrintError("GetUserByDisplayName: " + err.Error())
+		return user
 	}
+
+	// If the length is greater than 0 we have a user
+	// If the length is greater than 1 we have multiple users with the same display name
+	// Iterate over the results and return the first one
+	// - Or you know what, the user should be able to remember their display name and their three digits
+	// if res := results.Next(); len(res) > 1 {
+	// 	err := results.Scan(
+	// 		&user.UserID, &user.DisplayName, &user.CreatedAt,
+	// 		&user.UpdatedAt, &user.LastLogin, &user.Role,
+	// 		&user.FirstName, &user.ProfileImageUrl,
+	// 		&user.SessionId, &user.AuthMethodID,
+	// 	)
+
+	// 	if err != nil {
+	// 		util.PrintError("GetUserByDisplayName: " + err.Error())
+	// 	}
+	// }
+	// err := results.Scan(
+	// 	&user.UserID, &user.DisplayName, &user.CreatedAt,
+	// 	&user.UpdatedAt, &user.LastLogin, &user.Role,
+	// 	&user.FirstName, &user.ProfileImageUrl,
+	// 	&user.SessionId, &user.AuthMethodID,
+	// )
+	// if err != nil {
+	// 	util.PrintError("GetUserByDisplayName: " + err.Error())
+	// }
 	return user
 }
 
 func DbToUserStruct() {
+
+}
+
+func GetUserAuth(user User, method AuthMethod) {
+	if user.AuthMethodID == 0 { // Password
+		// Get user by display name
+		// Get password hash
+		// Compare password hash
+		// Return user
+	}
+
+	if user.AuthMethodID == 1 { // WebAuthn
+		// Get user by display name
+		// Get webauthn data
+		// Compare webauthn data
+		// Return user
+	}
 
 }
 

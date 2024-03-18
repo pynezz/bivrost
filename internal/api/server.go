@@ -131,6 +131,7 @@ func setupRoutes(app *fiber.App, cfg *config.Cfg) {
 	})
 
 	app.Post("/login", middleware.BeginLogin)
+	app.Post("/register", middleware.BeginRegistration)
 
 	// app.Post("/login", middleware.BeginLogin /*handleAuth*/, func(c *fiber.Ctx) error {
 	// 	// Get the username and password from the request body
