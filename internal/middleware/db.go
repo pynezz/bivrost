@@ -194,7 +194,7 @@ func (db *Database) Connect(dbPath string) (*Database, error) {
 	util.PrintDebug("Testing write...")
 	TestWrite(DBInstance)
 
-	testPrintRows(DBInstance)
+	// testPrintRows(DBInstance)
 	return DBInstance, nil
 }
 
@@ -458,4 +458,53 @@ func getRandomName() string {
 	}
 
 	return RandomFirstName[randFNameIndex] + " " + RandomLastName[randLNameIndex]
+}
+
+// Just helpers to not have to remember the column names and to avoid typos
+// UC = User Column. Column names in the user database. Not sure if this is the Go way of doing it
+const (
+	UCId           string = "UserID"
+	UCDisplayName  string = "DisplayName"
+	UCRole         string = "Role"
+	UCFirstName    string = "FirstName"
+	UCCreatedAt    string = "CreatedAt"
+	UCUpdatedAt    string = "UpdatedAt"
+	UCLastLogin    string = "LastLogin"
+	UCProfileUrl   string = "ProfileImageURL"
+	UCSessionId    string = "SessionId"
+	UCAuthMethodId string = "AuthMethodID"
+
+	// User column operators, maybe not necessary
+	UCeq        string = "="
+	UCneq       string = "!="
+	UClt        string = "<"
+	UClte       string = "<="
+	UCgt        string = ">"
+	UCgte       string = ">="
+	UClike      string = "LIKE"
+	UCin        string = "IN"
+	UCnotin     string = "NOT IN"
+	UCand       string = "AND"
+	UCor        string = "OR"
+	UCnot       string = "NOT"
+	UCisnull    string = "IS NULL"
+	UCisnotnull string = "IS NOT NULL"
+)
+
+// To be used in conjuction with a QueryRow such that the column is passed as a parameter,
+// and the value is passed as another parameter
+// Example: SELECT * FROM users WHERE <column> = ?
+// The first ? is the column, and the second ? is the value
+func (d *Database) SelectColEq(col string) string {
+	return fmt.Sprintf(`SELECT UserID, DisplayName, CreatedAt, UpdatedAt, LastLogin, Role,
+		FirstName, ProfileImageURL,
+		SessionId, AuthMethodID
+		FROM users WHERE %s = ?`, col)
+}
+
+func (d *Database) SelectCol(col string, operator string) string {
+	return fmt.Sprintf(`SELECT UserID, DisplayName, CreatedAt, UpdatedAt, LastLogin, Role,
+		FirstName, ProfileImageURL,
+		SessionId, AuthMethodID
+		FROM users WHERE %s %s ?`, col, operator)
 }

@@ -99,8 +99,22 @@ type User struct {
 	AuthMethodID    int    `json:"authmethodid"`
 }
 
+// type User struct {
+// 	UserID          uint64
+// 	DisplayName     string
+// 	CreatedAt       string
+// 	UpdatedAt       string
+// 	LastLogin       string
+// 	Role            string
+// 	FirstName       string
+// 	ProfileImageUrl string
+// 	SessionId       string
+// 	AuthMethodID    int
+// }
+
 type Users struct {
-	Users []User `json:"users"`
+	Users    []User `json:"users"`
+	Marshall func() string
 }
 
 // For incoming requests to create a user
@@ -209,55 +223,6 @@ func ValidateUserPasswordAuth(userAuth PasswordAuth) (bool, []error) {
 type UserQuery interface {
 	GetUserByID(id string) // Return generic type
 	GetUserByDisplayName(displayname string) User
-}
-
-// Just helpers to not have to remember the column names and to avoid typos
-// UC = User Column. Column names in the user database. Not sure if this is the Go way of doing it
-const (
-	UCId           string = "UserID"
-	UCDisplayName  string = "DisplayName"
-	UCRole         string = "Role"
-	UCFirstName    string = "FirstName"
-	UCCreatedAt    string = "CreatedAt"
-	UCUpdatedAt    string = "UpdatedAt"
-	UCLastLogin    string = "LastLogin"
-	UCProfileUrl   string = "ProfileImageURL"
-	UCSessionId    string = "SessionId"
-	UCAuthMethodId string = "AuthMethodID"
-
-	// User column operators, maybe not necessary
-	UCeq        string = "="
-	UCneq       string = "!="
-	UClt        string = "<"
-	UClte       string = "<="
-	UCgt        string = ">"
-	UCgte       string = ">="
-	UClike      string = "LIKE"
-	UCin        string = "IN"
-	UCnotin     string = "NOT IN"
-	UCand       string = "AND"
-	UCor        string = "OR"
-	UCnot       string = "NOT"
-	UCisnull    string = "IS NULL"
-	UCisnotnull string = "IS NOT NULL"
-)
-
-// To be used in conjuction with a QueryRow such that the column is passed as a parameter,
-// and the value is passed as another parameter
-// Example: SELECT * FROM users WHERE <column> = ?
-// The first ? is the column, and the second ? is the value
-func (d *Database) SelectColEq(col string) string {
-	return fmt.Sprintf(`SELECT UserID, DisplayName, CreatedAt, UpdatedAt, LastLogin, Role,
-		FirstName, ProfileImageURL,
-		SessionId, AuthMethodID
-		FROM users WHERE %s = ?`, col)
-}
-
-func (d *Database) SelectCol(col string, operator string) string {
-	return fmt.Sprintf(`SELECT UserID, DisplayName, CreatedAt, UpdatedAt, LastLogin, Role,
-		FirstName, ProfileImageURL,
-		SessionId, AuthMethodID
-		FROM users WHERE %s %s ?`, col, operator)
 }
 
 // Important to note: https://go.dev/doc/database/sql-injection
@@ -371,7 +336,6 @@ func GetUserByDisplayName(displayname string) User { // Displayname is used to l
 }
 
 func DbToUserStruct() {
-
 }
 
 func GetUserAuth(user User, method AuthMethod) {
@@ -391,24 +355,9 @@ func GetUserAuth(user User, method AuthMethod) {
 
 }
 
-// https://placeholders.dev/
-//
-// Available API Options
-// width 		- Width of generated image. Defaults to 300.
-// height 		- Height of generated image. Defaults to 150.
-// text 		- Text to display on generated image. Defaults to the image dimensions.
-// fontFamily 	- Font to use for the text. Defaults to sans-serif.
-// fontWeight 	- Font weight to use for the text. Defaults to bold.
-// fontSize 	- Font size to use for the text. Defaults to 20% of the shortest image dimension, rounded down.
-// dy 			- Adjustment applied to the dy attribute of the text element to appear vertically centered. Defaults to 35% of the font size.
-// bgColor 		- Background color of the image. Defaults to #ddd
-// textColor 	- Color of the text. For transparency, use an rgba or hsla value. Defaults to rgba(0,0,0,0.5)
-// textWrap 	- Wrap text to fit within the image (to best ability). Will not alter font size, so especially long strings may still appear outside of the image. Defaults to false
-// Example URL
-// https://images.placeholders.dev/?width=1055&height=100&text=Made%20with%20placeholders.dev&bgColor=%23f7f6f6&textColor=%236d6e71
-
+// Check https://placeholders.dev/ for more info
 type PlaceholderImage struct {
-	Width      int
+	Width      int ``
 	Height     int
 	Text       string
 	FontFamily string
@@ -420,46 +369,9 @@ type PlaceholderImage struct {
 	TextWrap   bool
 }
 
-// // GetPlaceholderImage returns a URL to a placeholder image
-// func GetPlaceholderImage(params PlaceholderImage) string {
-// 	// Make a request to the placeholders.dev API
-// 	// Return the image as a byte array
-
-// 	url := "https://images.placeholders.dev/"
-
-// 	switch {
-// 	case params.Width != 0:
-// 		url += "?width=" + strconv.Itoa(params.Width)
-// 		util.PrintDebug("url: " + url)
-
-// 	case params.Height != 0:
-// 		url += "&height=" + strconv.Itoa(params.Height)
-// 		util.PrintDebug("url: " + url)
-// 	case params.Text != "":
-// 		url += "&text=" + params.Text
-// 	case params.FontFamily != "":
-// 		url += "&fontFamily=" + params.FontFamily
-// 	case params.FontWeight != "":
-// 		url += "&fontWeight=" + params.FontWeight
-// 	case params.FontSize != "":
-// 		url += "&fontSize=" + params.FontSize
-// 	case params.Dy != "":
-// 		url += "&dy=" + params.Dy
-// 	case params.BgColor != "":
-// 		url += "&bgColor=" + params.BgColor
-// 	case params.TextColor != "":
-// 		url += "&textColor=" + params.TextColor
-// 	case params.TextWrap:
-// 		url += "&textWrap=" + strconv.FormatBool(params.TextWrap)
-// 	default:
-// 		url += ""
-// 	}
-
-// 	util.PrintDebug("Placeholder image URL: " + url)
-
-// 	return url
-// }
-
+// This is a very ugly function.
+// TODO: Check if there's a better way to parse the struct
+// TODO: Check the url package
 // GetPlaceholderImage returns a URL to a placeholder image
 func GetPlaceholderImage(params PlaceholderImage) string {
 	baseURL := "https://images.placeholders.dev/"

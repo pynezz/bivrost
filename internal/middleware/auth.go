@@ -101,7 +101,14 @@ type WebAuthnRegisterRequest struct {
 }
 
 // Bouncer is a middleware that checks if the user is authenticated.
-func Bouncer(secretKey string) fiber.Handler {
+// The client needs to send a JWT token in the Authorization header.
+// As such:
+// FIELD | VALUE
+// Authorization | Bearer <token>
+// The client needs to send the token in the Authorization header after
+// fetching it from the server.
+
+func Bouncer() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		fmt.Println("Authenticating user...")
 		// Extract the token from the Authorization header.
@@ -119,17 +126,7 @@ func Bouncer(secretKey string) fiber.Handler {
 		fmt.Println("Token: ", tokenString)
 
 		// Validate token
-		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-			signing := token.Header["alg"]
-			fmt.Printf("%v\n", token)
-			fmt.Println("Signing method: ", signing)
-			// Ensure token's signing method matches
-			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, fiber.ErrUnauthorized
-			}
-
-			return []byte(secretKey), nil
-		})
+		token, err := VerifyJWTToken(tokenString)
 
 		if err != nil || !token.Valid {
 			return c.Status(fiber.StatusUnauthorized).SendString("Unauthorized")
@@ -284,22 +281,23 @@ func BeginRegistration(c *fiber.Ctx) error {
 
 	// Insert the user into the database
 	db := GetDBInstance()
-	displayName := getRandomName()
+	// displayName := getRandomName()
 
 	// Generate a cryptographically secure random 32-bit integer
 	var randomID uint64
 	randomID, err := cryptoutils.GenerateRandomInt(1000000, 10000000) // I know I shouldn't have hardcoded these...
-	util.PrintDebug("Generated random ID: " + strconv.Itoa(int(randomID)) + " for user " + displayName)
+	util.PrintDebug("Generated random ID: " + strconv.Itoa(int(randomID)) + " for user " + username)
 	if err != nil {
 		util.PrintError(err.Error())
 	}
 
-	today := time.Now().Format("01-02-2006 15:04:05")
+	today := time.Now()
+	timestamp := today.Format("01-02-2006 15:04:05")
 
 	profileImageUrl := PlaceholderImage{
 		Width:  200,
 		Height: 200,
-		Text:   displayName,
+		Text:   username,
 	}
 
 	userId := randomID
@@ -308,20 +306,20 @@ func BeginRegistration(c *fiber.Ctx) error {
 	// We could then hash this in some magical way to make it tamper proof by checking the last login time
 	// and the session id
 	// sessionId := time.Now() * time.Nanosecond + strconv.FormatUint(userId, 10)
-	sessionId := time.UnixDate + strconv.FormatUint(userId, 10)
+	sessionId := util.UserSessionIdValue(randomID, today)
 	util.PrintDebug("Generated session ID: " + sessionId)
 
 	u := User{
 		UserID:          userId,
-		DisplayName:     displayName + fmt.Sprintf("%s%s", "#", strconv.FormatUint(userId, 10)[:3]),
-		CreatedAt:       today,
-		UpdatedAt:       today,
-		LastLogin:       today,
+		DisplayName:     username + fmt.Sprintf("%s%s", "#", strconv.FormatUint(userId, 10)[:3]),
+		CreatedAt:       timestamp,
+		UpdatedAt:       timestamp,
+		LastLogin:       timestamp,
 		Role:            "user",
 		FirstName:       "John",
 		ProfileImageUrl: GetPlaceholderImage(profileImageUrl),
 		SessionId:       sessionId,
-		AuthMethodID:    1, // 3 = Password + WebAuthn
+		AuthMethodID:    1, // 1 = Password | 2 = WebAuthn | 3 = Password + WebAuthn
 	}
 
 	err = db.Write(`INSERT INTO users (

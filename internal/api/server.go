@@ -8,12 +8,14 @@ import (
 	"github.com/pynezz/bivrost/internal/config"
 	"github.com/pynezz/bivrost/internal/middleware"
 	"github.com/pynezz/bivrost/internal/util"
-	"github.com/pynezz/bivrost/internal/util/cryptoutils"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/websocket/v2"
 )
+
+// JWTSecretKey is the secret key used to sign JWT tokens
+// This will not be hardcoded in the build version
 
 type App struct {
 	*fiber.App
@@ -31,6 +33,7 @@ type ConfigRequest struct {
 // NewServer initializes a new API server with the provided configuration.
 // Renamed config.Config to config.Cfg to avoid confusion with the Fiber Config struct
 func NewServer(cfg *config.Cfg) *fiber.App {
+	argon2Instance := middleware.NewArgon2().InitArgonWithSalt(middleware.GetSecretKey(), "salt")
 
 	// Configure the fiber server with values from the config file
 	app := fiber.New(fiber.Config{
@@ -44,18 +47,18 @@ func NewServer(cfg *config.Cfg) *fiber.App {
 	// Middleware
 	app.Use(logger.New()) // Log every request
 
-	// Generate a secure secret key for JWT authentication. This shoukld be done for every login request
-	secretKey, err := cryptoutils.GenerateSecretKey() // I know this is not properly implemented, but it's just for testing purposes
-	if err != nil {
-		log.Fatalf("Error generating secret key: %v", err)
-	}
+	// Generate a secure secret key for JWT authentication. This is what the server signs the JWT tokens with.
+	// secretKey, err := cryptoutils.GenerateSecretKey(cryptoutils.GetBivrostJWTSecret())
+	// if err != nil {
+	// log.Fatalf("Error generating secret key: %v", err)
+	// }
 
 	// Base64 encode the secret key
 	// key := base64.StdEncoding.EncodeToString([]byte(secretKey))
-	fmt.Println(util.ColorF(util.DarkYellow, "Secret key: %s", secretKey))
+	fmt.Println(util.ColorF(util.DarkYellow, "Secret key: %s", argon2Instance.GetPrintableKey()))
 
 	// app.Use(middleware.AuthMiddleware(secretKey))
-	app.Get("/dashboard", middleware.Bouncer(secretKey))
+	app.Get("/", middleware.Bouncer())
 
 	// Setup routes
 	setupRoutes(app, cfg)
@@ -101,6 +104,9 @@ func setupRoutes(app *fiber.App, cfg *config.Cfg) {
 	})
 
 	// Auth route
+	// For this to work, the client must send a GET request to /auth/<id>
+	// With body: Bearer Token <key>
+
 	app.Get("/auth/:id", func(c *fiber.Ctx) error {
 		q := c.Queries()
 		fmt.Println("[i] Query parameters")
@@ -174,6 +180,7 @@ func indexHandler(c *fiber.Ctx) error {
 	c.Accepts("json", "text")                   // "json"
 	c.Accepts("application/json")               // "application/json"
 	c.Accepts("text/plain", "application/json") // "application/json", due to quality
+
 	return c.SendString("Bivrost Fiber API Server is up and running!")
 }
 

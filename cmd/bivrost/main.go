@@ -58,6 +58,9 @@ func main() {
 		return
 	}
 
+	// var argon2Obj = cryptoutils.Argon2{} // Change the type to cryptoutils.Argon2
+	// cryptoutils.InitArgon2(&argon2Obj) // Pass the address of argon2Obj
+
 	// Connect to database
 	db, err := middleware.NewDBService().Connect(cfg.Database.Path)
 	if err != nil {
