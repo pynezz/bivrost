@@ -196,20 +196,19 @@ func ValidateNewUser(user CreateUserRequest) (bool, []error) {
 	return false, err
 }
 
-// [!] Not sure if this is going to be neeeded. Better fit in auth.go
-func ValidateUserPasswordAuth(userAuth PasswordAuth) (bool, []error) {
+func (p *PasswordAuth) ValidatePasswordAuth() (bool, []error) {
 	var err []error
 
-	switch {
-	case userAuth.PasswordHash == "":
-		err = append(err, NewUserValidationError("Password is required"))
-
-	// case len(userAuth.PasswordHash.Password) < 12:
-	// err = append(err, NewUserValidationError("Password must be at least 12 characters long"))
-
-	default:
-		return true, nil
+	if p.UserID == 0 {
+		err = append(err, NewUserValidationError("User ID is required"))
 	}
+	if p.Enabled != 0 && p.Enabled != 1 {
+		err = append(err, NewUserValidationError("Enabled must be 0 or 1"))
+	}
+	if p.PasswordHash == "" {
+		err = append(err, NewUserValidationError("Password hash is required"))
+	}
+
 	return false, err
 }
 
@@ -241,16 +240,6 @@ func GetUserByID(id string) User {
 	if instance.Driver == nil {
 		return user
 	}
-	// err := instance.Driver.QueryRow(
-	// 	`SELECT UserID, DisplayName, CreatedAt,
-	// 	UpdatedAt, LastLogin, Role,
-	// 	FirstName, ProfileImageURL,
-	// 	SessionId, AuthMethodID
-	// 	FROM users WHERE UserID = ?`, id).Scan(
-	// 	&user.UserID, &user.DisplayName, &user.CreatedAt,
-	// 	&user.UpdatedAt, &user.LastLogin, &user.Role,
-	// 	&user.FirstName, &user.ProfileImageUrl,
-	// 	&user.SessionId, &user.AuthMethodID)
 
 	err := instance.Driver.QueryRow(instance.SelectColEq(UCId), id).
 		Scan(
@@ -364,10 +353,6 @@ func GetPasswordHash(userId uint64) (PasswordAuth, error) { // Should maybe retu
 		}
 	}
 	return pwAuth, nil
-}
-
-func DbToUserStruct() {
-
 }
 
 func GetUserAuth(user User, method AuthMethod) {
