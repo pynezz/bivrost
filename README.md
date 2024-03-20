@@ -176,6 +176,19 @@ Bivrost is integrated with [TheValve](https://github.com/pynezz/thevalve), where
 - Go version > 1.21
 - gcc *(for go-sqlite3 as it requires cgo)*
 
+### Protobuf
+
+- [Protocol Buffers](https://developers.google.com/protocol-buffers)
+
+```bash
+go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+```
+
+```bash
+go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+```
+
+
 ## License
 
 *TBD*

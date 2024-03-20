@@ -11,6 +11,7 @@ import (
 
 	"github.com/pynezz/bivrost/internal/api"
 	"github.com/pynezz/bivrost/internal/config"
+	"github.com/pynezz/bivrost/internal/connector"
 	"github.com/pynezz/bivrost/internal/fsutil"
 	"github.com/pynezz/bivrost/internal/middleware"
 	"github.com/pynezz/bivrost/internal/tui"
@@ -50,6 +51,9 @@ func main() {
 			return
 		}
 	}
+
+	// Testing the proto connection
+	go testProtoConnection()
 
 	// Load the config
 	cfg, err := config.LoadConfig(*flags.Params.ConfigPath)
@@ -128,4 +132,8 @@ func testDbConnection() {
 		return
 	}
 	util.PrintColorBold(util.LightGreen, "🎉 Database connected!")
+}
+
+func testProtoConnection() {
+	connector.Initialize()
 }
