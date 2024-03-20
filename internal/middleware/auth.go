@@ -19,50 +19,15 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
-// CREATE TABLE auth_methods (
-//     AuthMethodID INTEGER PRIMARY KEY,
-//     Description TEXT
-// );
-
-// /* Populate auth_methods with initial data */
-// INSERT INTO auth_methods (AuthMethodID, Description)
-// VALUES
-//     (1, 'Password'),
-//     (2, 'WebAuthn');
-
-// CREATE TABLE user_sessions ( -- This table will store the user sessions
-//     SessionID TEXT PRIMARY KEY,
-//     UserID INTEGER NOT NULL,
-//     Token TEXT NOT NULL, /* The user session is a JWT Token */
-//     FOREIGN KEY (UserID) REFERENCES users(UserID) ON DELETE CASCADE
-// );
-
-// CREATE TABLE webauthn_auth (    -- This table will store essential data for WebAuthn authentication
-//     CredentialID TEXT PRIMARY KEY,
-//     UserID INTEGER NOT NULL,
-//     PublicKey TEXT NOT NULL,
-//     UserHandle TEXT NOT NULL,
-//     SignatureCounter INTEGER NOT NULL,
-//     CreatedAt TEXT DEFAULT (datetime('now')),
-//     FOREIGN KEY (UserID) REFERENCES users(UserID) ON DELETE CASCADE
-// );
-
-// CREATE TABLE password_auth ( -- This table will store the related rows for password authentication
-//     UserID INTEGER PRIMARY KEY,
-//     Enabled BOOLEAN DEFAULT 1, -- SQLite uses 1 for TRUE
-//     PasswordHash TEXT NOT NULL, -- Argon2 hash
-//     FOREIGN KEY (UserID) REFERENCES users(UserID) ON DELETE CASCADE
-// );
-
 type AuthMethod struct {
 	AuthMethodID int
 	Description  string
 }
 
 type UserSession struct {
-	SessionID string
-	UserID    int
-	Token     string
+	UserID    uint64 `json:"userId"`
+	Token     string `json:"token"`
+	SessionID string `json:"sessionId"`
 }
 
 type WebAuthnAuth struct {
@@ -218,12 +183,6 @@ func BeginLogin(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusUnauthorized).SendString("Invalid credentials")
 	}
 
-	// pwAuth := PasswordAuth{
-	// 	UserID:       user.UserID,
-	// 	Enabled:      1,
-	// 	PasswordHash: "",
-	// }
-
 	pwAuth, err := GetPasswordHash(user.UserID)
 	if err != nil {
 		util.PrintError("Error getting password hash: " + err.Error())
@@ -270,9 +229,10 @@ func BeginLogin(c *fiber.Ctx) error {
 	// 	user.LastLogin,
 	// 	user.UserID, user.DisplayName, user.AuthMethodID)
 
-	resultstring := LoginSuccessHTML(user, token)
+	// resultstring := LoginSuccessHTML(user, token)
 
-	return c.Status(fiber.StatusOK).SendString(resultstring)
+	// return c.Status(fiber.StatusOK).SendString(resultstring)
+	return c.Status(fiber.StatusOK).JSON(LoginSucessJSON(user, token))
 
 	// c.App().Post("/login", func(lctx *fiber.Ctx) error {
 	// 	util.PrintDebug("Got a POST request to /login")

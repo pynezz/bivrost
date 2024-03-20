@@ -264,36 +264,6 @@ func (db *Database) Write(query string, args ...interface{}) (sql.Result, error)
 	return result, nil
 }
 
-// // TODO: Fetch executes a SELECT query and returns the result.
-// func (db *Database) Fetch(query string, args ...interface{}) ([]RowScanner, error) {
-// 	rows, err := db.Driver.Query(query, args...)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	defer rows.Close()
-
-// 	var result []RowScanner
-// 	for rows.Next() {
-// 		var field RowScanner
-// 		err := rows.Scan(&field)
-// 		if err != nil {
-// 			return nil, err
-// 		}
-
-// 		result = append(result, field)
-// 		// Here we need to account for the db structure.
-// 		// var field string
-// 		// for field, i in rows.Scanner() { ... } // Something along these lines
-// 		// result = append(result, &i)	// TODO: Do this properly
-// 	}
-
-// 	if err := rows.Err(); err != nil {
-// 		return nil, err
-// 	}
-
-// 	return result, nil
-// }
-
 func (db *Database) Fetch(query string, args ...interface{}) (*sql.Rows, error) {
 	rows, err := db.Driver.Query(query, args...)
 	util.PrintInfo("Fetched rows: " + fmt.Sprint(rows))
@@ -348,19 +318,6 @@ var RandomLastName []string = []string{
 }
 
 func TestWrite(database *Database) {
-	//     UserID INTEGER PRIMARY KEY AUTOINCREMENT,
-	//     DisplayName TEXT UNIQUE NOT NULL,
-	//     CreatedAt TEXT DEFAULT (datetime('now')),
-	//     UpdatedAt TEXT DEFAULT (datetime('now')),
-	//     LastLogin TEXT,
-	//     Role TEXT CHECK(Role IN ('admin', 'user')) DEFAULT 'user',
-	//     FirstName TEXT,
-	//     ProfileImageURL TEXT,
-	//     SessionId TEXT,
-	//     AuthMethodID INTEGER   /* This is a foreign key to the auth_methods table,
-	//
-	// today := time.Now().Format("01-02-2006 15:04:05")
-
 	displayName := getRandomName()
 
 	// Generate a cryptographically secure random 32-bit integer

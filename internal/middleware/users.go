@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"reflect"
@@ -101,19 +102,6 @@ type User struct {
 	AuthMethodID    int    `json:"authmethodid"`
 }
 
-// type User struct {
-// 	UserID          uint64
-// 	DisplayName     string
-// 	CreatedAt       string
-// 	UpdatedAt       string
-// 	LastLogin       string
-// 	Role            string
-// 	FirstName       string
-// 	ProfileImageUrl string
-// 	SessionId       string
-// 	AuthMethodID    int
-// }
-
 type Users struct {
 	Users    []User `json:"users"`
 	Marshall func() string
@@ -130,9 +118,10 @@ type CreateUserRequest struct {
 
 // What to answer when a user is created
 type CreateUserResponse struct {
-	Success bool   `json:"success"`
-	Message string `json:"message"`
-	Data    User   `json:"data"`
+	Success     bool        `json:"success"`
+	Message     string      `json:"message"`
+	DisplayName string      `json:"displayname"`
+	UserSession UserSession `json:"data"`
 }
 
 // NewUser creates a new user
@@ -142,7 +131,7 @@ type CreateUserResponse struct {
 // firstname: The first name of the user
 // profileimageurl: The profile image URL of the user (NOT required)
 // sessionid: The session ID of the user
-// authmethodid: The authentication method ID of the user (0 = password, 1 = webauthn)
+// authmethodid: The authentication method ID of the user (1 = password, 2 = webauthn, 3 = both)
 func NewUser(
 	displayname string,
 	password string,
@@ -231,8 +220,6 @@ type UserQuery interface {
 // If we get this ID from the client, we need to ensure its integrity by validating it in a JWT token, or something
 // We'll see if it's necessary to implement this
 func GetUserByID(id string) User {
-	// Lookup user id in the database
-	// Return the result as a User struct
 	var user User
 
 	// Query the database for the user
@@ -269,19 +256,6 @@ func GetUserByDisplayName(displayname string) User { // Displayname is used to l
 	if instance.Driver == nil {
 		return user
 	}
-	// err := instance.Driver.QueryRow(
-	// 	`SELECT UserID, DisplayName, CreatedAt,
-	// 	UpdatedAt, LastLogin, Role,
-	// 	FirstName, ProfileImageURL,
-	// 	SessionId, AuthMethodID
-	// 	FROM users WHERE DisplayName = ?`, displayname).Scan( // Would be nice to have a function for this
-	// 	&user.UserID, &user.DisplayName, &user.CreatedAt,
-	// 	&user.UpdatedAt, &user.LastLogin, &user.Role,
-	// 	&user.FirstName, &user.ProfileImageUrl,
-	// 	&user.SessionId, &user.AuthMethodID)
-
-	// Will find any user that has the display name provided, and with any three digits
-	// SELECT * FROM users WHERE DisplayName LIKE 'displayname%'
 
 	util.PrintDebug("SelectCol: " + instance.SelectCol(UCDisplayName, UClike) + displayname + "#" + "%")
 
@@ -297,36 +271,11 @@ func GetUserByDisplayName(displayname string) User { // Displayname is used to l
 		util.PrintError("GetUserByDisplayName: " + err.Error())
 		return user
 	}
-
-	// If the length is greater than 0 we have a user
-	// If the length is greater than 1 we have multiple users with the same display name
-	// Iterate over the results and return the first one
-	// - Or you know what, the user should be able to remember their display name and their three digits
-	// if res := results.Next(); len(res) > 1 {
-	// 	err := results.Scan(
-	// 		&user.UserID, &user.DisplayName, &user.CreatedAt,
-	// 		&user.UpdatedAt, &user.LastLogin, &user.Role,
-	// 		&user.FirstName, &user.ProfileImageUrl,
-	// 		&user.SessionId, &user.AuthMethodID,
-	// 	)
-
-	// 	if err != nil {
-	// 		util.PrintError("GetUserByDisplayName: " + err.Error())
-	// 	}
-	// }
-	// err := results.Scan(
-	// 	&user.UserID, &user.DisplayName, &user.CreatedAt,
-	// 	&user.UpdatedAt, &user.LastLogin, &user.Role,
-	// 	&user.FirstName, &user.ProfileImageUrl,
-	// 	&user.SessionId, &user.AuthMethodID,
-	// )
-	// if err != nil {
-	// 	util.PrintError("GetUserByDisplayName: " + err.Error())
-	// }
 	return user
 }
 
-func GetPasswordHash(userId uint64) (PasswordAuth, error) { // Should maybe return an Argon2 struct
+// GetPasswordHash returns a PasswordAuth object for a user with the given ID
+func GetPasswordHash(userId uint64) (PasswordAuth, error) {
 	pwAuth := PasswordAuth{
 		UserID:       userId,
 		Enabled:      1,
@@ -378,7 +327,6 @@ func GetUserAuth(user User, method AuthMethod) {
 		// Compare webauthn data
 		// Return user
 	}
-
 }
 
 // Check https://placeholders.dev/ for more info
@@ -395,10 +343,8 @@ type PlaceholderImage struct {
 	TextWrap   bool
 }
 
+// GetPlaceholderImage returns a URL to a placeholder image.
 // This is a very ugly function.
-// TODO: Check if there's a better way to parse the struct
-// TODO: Check the url package
-// GetPlaceholderImage returns a URL to a placeholder image
 func GetPlaceholderImage(params PlaceholderImage) string {
 	baseURL := "https://images.placeholders.dev/"
 
@@ -460,6 +406,7 @@ func UpdateLastLoginTime(userId uint64) (sql.Result, error) {
 	return result, nil
 }
 
+// Return a string with some placeholder HTML for a successful login
 func LoginSuccessHTML(u User, jwt string) string {
 	return fmt.Sprintf(`
 	<!DOCTYPE html>
@@ -487,4 +434,25 @@ func LoginSuccessHTML(u User, jwt string) string {
 		time.Now().Format("2006-01-02 15:04:05"), u.ProfileImageUrl,
 		u.DisplayName, u.UserID, u.FirstName, u.Role, u.SessionId,
 		u.AuthMethodID, u.LastLogin, u.CreatedAt, u.UpdatedAt, jwt)
+}
+
+func LoginSucessJSON(u User, jwt string) string {
+
+	response := CreateUserResponse{
+		Success:     true,
+		Message:     "Login success",
+		DisplayName: u.DisplayName,
+		UserSession: UserSession{
+			SessionID: u.SessionId,
+			UserID:    u.UserID,
+			Token:     jwt,
+		},
+	}
+	json, err := json.Marshal(response)
+	if err != nil {
+		util.PrintError("LoginSuccessJSON: " + err.Error())
+		return ""
+	}
+
+	return string(json)
 }
