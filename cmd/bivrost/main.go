@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 
 	_ "github.com/mattn/go-sqlite3"
 
@@ -85,9 +86,13 @@ func main() {
 	// Meaning that the database will be closed when the application is closed.
 	defer db.Driver.Close()
 
+	port := 3000
+	if cfg.Network.Port != 0 {
+		port = cfg.Network.Port
+	}
 	// Create the web server
 	app := api.NewServer(cfg)
-	app.Listen(":3000")
+	app.Listen(":" + strconv.Itoa(port))
 }
 
 const dbPath = "users.db" // Testing purposes. This should be in the config file

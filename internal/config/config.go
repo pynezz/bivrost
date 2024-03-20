@@ -21,6 +21,7 @@ type Cfg struct {
 	Network struct {
 		ReadTimeout  int `yaml:"read_timeout,omitempty"`
 		WriteTimeout int `yaml:"write_timeout,omitempty"`
+		Port         int `yaml:"port,omitempty"`
 	} `yaml:"network"`
 	Database struct {
 		Path string `yaml:"path"`

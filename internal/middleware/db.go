@@ -112,6 +112,14 @@ type Tables struct {
 	PasswordAuth string
 }
 
+var DefaultTables = Tables{
+	Users:        "users",
+	AuthMethods:  "auth_methods",
+	UserSessions: "user_sessions",
+	WebAuthnAuth: "webauthn_auth",
+	PasswordAuth: "password_auth",
+}
+
 func (t *Tables) GetTables() []string {
 	return []string{t.Users, t.AuthMethods, t.UserSessions, t.WebAuthnAuth, t.PasswordAuth}
 }
@@ -143,13 +151,12 @@ func NewDBService() *Database {
 	}
 }
 
+// GetDBInstance returns the global database instance
 func GetDBInstance() *Database {
-	// TODO: Add some error handling in case the instance is nil.
 	if DBInstance == nil {
 		util.PrintError("Database instance is not connected, or is nil. Please connect to the database first via the Connect method.")
 		return nil
 	}
-
 	return DBInstance
 }
 
@@ -192,7 +199,7 @@ func (db *Database) Connect(dbPath string) (*Database, error) {
 	db.Driver = driver
 
 	util.PrintDebug("Testing write...")
-	TestWrite(DBInstance)
+	// TestWrite(DBInstance)
 
 	// testPrintRows(DBInstance)
 	return DBInstance, nil
@@ -233,6 +240,8 @@ func (db *Database) Migrate() error {
 	return err
 }
 
+type Write map[string]func(interface{}) string
+
 // Check for connectivity with the database
 func (db *Database) IsConnected() (bool, error) {
 	err := db.Driver.Ping()
@@ -246,20 +255,13 @@ func (db *Database) IsConnected() (bool, error) {
 //	if err != nil {
 //		return err
 //	}
-func (db *Database) Write(query string, args ...interface{}) error {
+func (db *Database) Write(query string, args ...interface{}) (sql.Result, error) {
 	result, err := db.Driver.Exec(query, args...)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	// You can check the result (e.g., number of rows affected) if needed.
-	// For example:
-	_, err = result.RowsAffected()
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return result, nil
 }
 
 // // TODO: Fetch executes a SELECT query and returns the result.
@@ -392,7 +394,7 @@ func TestWrite(database *Database) {
 		AuthMethodID:    0,
 	}
 
-	err = database.Write(`INSERT INTO users (
+	rowsAffected, err := database.Write(`INSERT INTO users (
 		UserID, DisplayName, CreatedAt,
 		UpdatedAt, LastLogin, Role,
 		FirstName, ProfileImageURL,
@@ -405,6 +407,8 @@ func TestWrite(database *Database) {
 	if err != nil {
 		util.PrintError(err.Error())
 	}
+
+	util.PrintSuccess(fmt.Sprintf("Inserted %d rows", rowsAffected))
 
 	testPrintRows(database)
 }
@@ -495,6 +499,14 @@ const (
 // and the value is passed as another parameter
 // Example: SELECT * FROM users WHERE <column> = ?
 // The first ? is the column, and the second ? is the value
+//
+// Query:
+//
+// SELECT UserID, DisplayName, CreatedAt, UpdatedAt, LastLogin, Role,
+// FirstName, ProfileImageURL,
+// SessionId, AuthMethodID
+//
+// FROM users WHERE %s = ?
 func (d *Database) SelectColEq(col string) string {
 	return fmt.Sprintf(`SELECT UserID, DisplayName, CreatedAt, UpdatedAt, LastLogin, Role,
 		FirstName, ProfileImageURL,
@@ -502,9 +514,52 @@ func (d *Database) SelectColEq(col string) string {
 		FROM users WHERE %s = ?`, col)
 }
 
+// Select a user column by the column name and the operator
+// Example: SELECT * FROM users WHERE <column> <operator> ?
+// (e.g., SELECT * FROM users WHERE [UserID] [=] ?)
 func (d *Database) SelectCol(col string, operator string) string {
 	return fmt.Sprintf(`SELECT UserID, DisplayName, CreatedAt, UpdatedAt, LastLogin, Role,
 		FirstName, ProfileImageURL,
 		SessionId, AuthMethodID
 		FROM users WHERE %s %s ?`, col, operator)
+}
+
+func (d *Database) UpdateCell(col string) string {
+	return fmt.Sprintf(`UPDATE users SET %s = ? WHERE UserID = ?`, col)
+}
+
+// Select a table by the column name and the value
+func (d *Database) SelectFromPasswordAuth(col string, value string) string {
+	return fmt.Sprintf(`SELECT UserID, Enabled, PasswordHash
+		FROM password_auth WHERE %s = ?`, col)
+}
+
+// Select a table by the column name and the value
+func (d *Database) SelectFromWebAuthnAuth(col string, value string) string {
+	return fmt.Sprintf(`SELECT CredentialID, UserID, PublicKey, UserHandle, SignatureCounter, CreatedAt
+		FROM webauthn_auth WHERE %s = ?`, col)
+}
+
+func (d *Database) SetAndEnablePasswordAuth(userId int, passwordHash string) string {
+	return fmt.Sprintf(`INSERT INTO password_auth (UserID, Enabled, PasswordHash)
+		VALUES (?, 1, ?)`, userId, passwordHash)
+}
+
+func (d *Database) SetWebAuthnAuth(credentialId string, userId int, publicKey string, userHandle string, signatureCounter int) string {
+	return fmt.Sprintf(`INSERT INTO webauthn_auth (CredentialID, UserID, PublicKey, UserHandle, SignatureCounter)
+		VALUES (?, ?, ?, ?, ?)`, credentialId, userId, publicKey, userHandle, signatureCounter)
+}
+
+func (d *Database) UpdateWebAuthnAuth(credentialId string, userId int, publicKey string, userHandle string, signatureCounter int) string {
+	return fmt.Sprintf(`UPDATE webauthn_auth SET PublicKey = ?, UserHandle = ?, SignatureCounter = ?
+		WHERE CredentialID = ? AND UserID = ?`, publicKey, userHandle, signatureCounter, credentialId, userId)
+}
+
+func (d *Database) UpdatePasswordAuth(userId int, passwordHash string) string {
+	return fmt.Sprintf(`UPDATE password_auth SET PasswordHash = ?
+		WHERE UserID = ?`, passwordHash, userId)
+}
+
+func (d *Database) GetPasswordHashQuery() string {
+	return fmt.Sprintln(`SELECT PasswordHash FROM password_auth WHERE UserID = ?`)
 }

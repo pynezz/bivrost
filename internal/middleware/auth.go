@@ -74,9 +74,10 @@ type WebAuthnAuth struct {
 	CreatedAt        time.Time
 }
 
+// PasswordAuth is a struct that represents the password_auth table in the database
 type PasswordAuth struct {
-	UserID       int
-	Enabled      bool
+	UserID       uint64
+	Enabled      int // SQLite uses 1 for TRUE
 	PasswordHash string
 }
 
@@ -87,8 +88,10 @@ type LoginRequest struct {
 }
 
 type PasswordRegisterRequest struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
+	Username    string `json:"username"`
+	Password    string `json:"password"`
+	DisplayName string `json:"displayName"`
+	Role        string `json:"role"`
 }
 
 type WebAuthnRegisterRequest struct {
@@ -109,7 +112,11 @@ type WebAuthnRegisterRequest struct {
 // fetching it from the server.
 
 func Bouncer() fiber.Handler {
+	util.PrintDebug("Bouncer middleware is running")
 	return func(c *fiber.Ctx) error {
+		if c.Route().Path == "/" {
+			return c.SendStatus(200)
+		}
 		fmt.Println("Authenticating user...")
 		// Extract the token from the Authorization header.
 		authHeader := c.Get("Authorization")
@@ -127,14 +134,15 @@ func Bouncer() fiber.Handler {
 
 		// Validate token
 		token, err := VerifyJWTToken(tokenString)
-
 		if err != nil || !token.Valid {
+			util.PrintError("[BOUNCER] error verifying token: " + err.Error())
 			return c.Status(fiber.StatusUnauthorized).SendString("Unauthorized")
 		}
 
 		util.PrintColorAndBgBold(util.Green, util.Cyan, "[+] User is authenticated 🎉")
 
 		// Token is valid, proceed with the request
+		util.PrintDebug("Token is valid, proceeding with the request. Bouncer done.")
 		return c.Next()
 	}
 }
@@ -176,7 +184,7 @@ func Base64Decode(b string) string {
 }
 
 // These functions are inspired from: https://github.com/go-webauthn/webauthn?tab=readme-ov-file#logging-into-an-account
-func BeginLogin(c *fiber.Ctx) error { // TODO: Figure out if it's best to use the context, or the app instance
+func BeginLogin(c *fiber.Ctx) error {
 
 	var loginReq LoginRequest
 	if err := c.BodyParser(&loginReq); err != nil {
@@ -210,11 +218,45 @@ func BeginLogin(c *fiber.Ctx) error { // TODO: Figure out if it's best to use th
 		return c.Status(fiber.StatusUnauthorized).SendString("Invalid credentials")
 	}
 
+	// pwAuth := PasswordAuth{
+	// 	UserID:       user.UserID,
+	// 	Enabled:      1,
+	// 	PasswordHash: "",
+	// }
+
+	pwAuth, err := GetPasswordHash(user.UserID)
+	if err != nil {
+		util.PrintError("Error getting password hash: " + err.Error())
+		return c.Status(fiber.StatusInternalServerError).SendString("Internal server error")
+	}
+
+	if pwAuth.PasswordHash == "" {
+		util.PrintError("No password hash found for user: " + username)
+		return c.Status(fiber.StatusUnauthorized).SendString("Invalid credentials")
+	}
+
+	util.PrintDebug("Found encoded hash: " + pwAuth.PasswordHash)
+
+	match, err := ComparePasswordAndHash(loginReq.Password, pwAuth.PasswordHash)
+	if err != nil {
+		util.PrintError("Error comparing password and hash: " + err.Error())
+		return c.Status(fiber.StatusInternalServerError).SendString("Internal server error")
+	}
+	if !match {
+		return c.Status(fiber.StatusUnauthorized).SendString("Invalid credentials")
+	}
+
 	// Now we need to update last login time
 	// UpdateLastLoginTime(username)
 
 	// We also need to consider what to look for in the database when the user logs in.
 	// It might be hard to remember their username and their three digits
+
+	// Now I want to set the JWT token in the Authorization header for the client
+	// Generate a JWT token
+	util.PrintDebug("Generating JWT token for user: " + username)
+	token := GenerateJWTToken(user, time.Now())
+	c.WriteString(token)
 
 	// Return a welcome message
 	resultstring := fmt.Sprintf(
@@ -274,11 +316,6 @@ func BeginRegistration(c *fiber.Ctx) error {
 
 	util.PrintSuccess("Username: " + username)
 
-	var tempUser User
-	tempUser.DisplayName = username
-	tempUser.AuthMethodID = 1 // Password
-	tempUser.LastLogin = time.Now().Format("2006-01-02 15:04:05")
-
 	// Insert the user into the database
 	db := GetDBInstance()
 	// displayName := getRandomName()
@@ -309,20 +346,26 @@ func BeginRegistration(c *fiber.Ctx) error {
 	sessionId := util.UserSessionIdValue(randomID, today)
 	util.PrintDebug("Generated session ID: " + sessionId)
 
+	// Creating the user to insert into the database
 	u := User{
-		UserID:          userId,
-		DisplayName:     username + fmt.Sprintf("%s%s", "#", strconv.FormatUint(userId, 10)[:3]),
-		CreatedAt:       timestamp,
-		UpdatedAt:       timestamp,
-		LastLogin:       timestamp,
-		Role:            "user",
-		FirstName:       "John",
+		UserID:      userId,
+		DisplayName: username + fmt.Sprintf("%s%s", "#", strconv.FormatUint(userId, 10)[:3]),
+		CreatedAt:   timestamp,
+		UpdatedAt:   timestamp,
+		LastLogin:   timestamp,
+		Role:        "user",
+		FirstName: func(s string) string { // This is a closure
+			if len(s) > 0 {
+				return regReq.DisplayName // If the display name is not empty, use it
+			}
+			return username // If the display name is empty, use the username
+		}(regReq.DisplayName), // Run the closure
 		ProfileImageUrl: GetPlaceholderImage(profileImageUrl),
 		SessionId:       sessionId,
 		AuthMethodID:    1, // 1 = Password | 2 = WebAuthn | 3 = Password + WebAuthn
 	}
 
-	err = db.Write(`INSERT INTO users (
+	result, err := db.Write(`INSERT INTO users (
 		UserID, DisplayName, CreatedAt,
 		UpdatedAt, LastLogin, Role,
 		FirstName, ProfileImageURL,
@@ -331,10 +374,11 @@ func BeginRegistration(c *fiber.Ctx) error {
 		u.UpdatedAt, u.LastLogin, u.Role,
 		u.FirstName, u.ProfileImageUrl,
 		u.SessionId, u.AuthMethodID)
-
 	if err != nil {
 		util.PrintError(err.Error())
 	}
+	rowsAffected, _ := result.RowsAffected()
+	util.PrintDebug("Affected rows: " + strconv.FormatInt(rowsAffected, 10)) // Get the affected amount of rows
 
 	// Insert password hash into the password_auth table
 
@@ -355,15 +399,30 @@ func BeginRegistration(c *fiber.Ctx) error {
 	util.PrintSuccess("Generated encoded hash: " + encodedHash)
 
 	// Insert the password hash into the password_auth table
-	err = db.Write(`INSERT INTO password_auth (UserID, Enabled, PasswordHash) VALUES (?, ?, ?)`,
+	result, err = db.Write(`INSERT INTO password_auth (UserID, Enabled, PasswordHash) VALUES (?, ?, ?)`,
 		u.UserID, true, encodedHash)
 	if err != nil {
 		util.PrintError("Error inserting password hash into the database: " + err.Error())
 		return c.Status(fiber.StatusInternalServerError).SendString("Internal server error")
 	}
 
-	// Generate a JWT token
+	rowsAffected, _ = result.RowsAffected()
+	util.PrintDebug("Affected rows: " + strconv.FormatInt(rowsAffected, 10))
 
+	// Generate a JWT token
+	token := GenerateJWTToken(u, today)
+
+	if _, err := VerifyJWTToken(token); err != nil {
+		util.PrintError("Error verifying token: " + err.Error())
+		return c.Status(fiber.StatusInternalServerError).SendString("Internal server error")
+	}
+
+	if FinishRegistration(u) != nil {
+		util.PrintError("Error finishing registration")
+		return c.Status(fiber.StatusInternalServerError).SendString("Internal server error")
+	}
+
+	c.Context().SetBody([]byte(token))
 	// Return register success
 	return c.Status(fiber.StatusOK).SendString("Registration successful")
 
@@ -372,8 +431,10 @@ func BeginRegistration(c *fiber.Ctx) error {
 }
 
 // TODO: Implement the finish registration process
-func FinishRegistration() {
-	// Implement
+func FinishRegistration(user User) error {
+	// Update the user's last login time
+	UpdateLastLoginTime(user.UserID)
+	return nil
 }
 
 // TODO: Implement the logoff process

@@ -1,11 +1,13 @@
 package middleware
 
 import (
+	"database/sql"
 	"fmt"
 	"net/url"
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/pynezz/bivrost/internal/util"
 )
@@ -335,19 +337,58 @@ func GetUserByDisplayName(displayname string) User { // Displayname is used to l
 	return user
 }
 
+func GetPasswordHash(userId uint64) (PasswordAuth, error) { // Should maybe return an Argon2 struct
+	pwAuth := PasswordAuth{
+		UserID:       userId,
+		Enabled:      1,
+		PasswordHash: "",
+	}
+
+	// SELECT PasswordHash FROM password_auth WHERE UserID = ?
+	util.PrintDebug("Getting password hash for user with ID: " + strconv.FormatUint(userId, 10))
+	instance := GetDBInstance()
+	if instance.Driver == nil {
+		return pwAuth, fmt.Errorf("Database driver is nil")
+	}
+	rows, err := instance.Fetch(instance.GetPasswordHashQuery(), userId)
+	if err != nil {
+		util.PrintError("GetPasswordHash: " + err.Error())
+		return pwAuth, err
+	}
+
+	if rows.Next() {
+		err = rows.Scan(&pwAuth.PasswordHash)
+		if err != nil {
+			util.PrintError("GetPasswordHash: " + err.Error())
+			return pwAuth, err
+		}
+	}
+	return pwAuth, nil
+}
+
 func DbToUserStruct() {
+
 }
 
 func GetUserAuth(user User, method AuthMethod) {
-	if user.AuthMethodID == 0 { // Password
+	if user.AuthMethodID == 1 { // Password
 		// Get user by display name
 		// Get password hash
 		// Compare password hash
 		// Return user
 	}
 
-	if user.AuthMethodID == 1 { // WebAuthn
+	if user.AuthMethodID == 2 { // WebAuthn
 		// Get user by display name
+		// Get webauthn data
+		// Compare webauthn data
+		// Return user
+	}
+
+	if user.AuthMethodID == 3 { // Both
+		// Get user by display name
+		// Get password hash
+		// Compare password hash
 		// Get webauthn data
 		// Compare webauthn data
 		// Return user
@@ -408,4 +449,26 @@ func GetPlaceholderImage(params PlaceholderImage) string {
 	fmt.Println("Placeholder image URL: " + urlWithParams)
 
 	return urlWithParams
+}
+
+// UpdateLastLoginTime updates the last login time of a user
+// It returns the amount of affected rows, or an error
+func UpdateLastLoginTime(userId uint64) (sql.Result, error) {
+	util.PrintDebug("Updating last login time for user with ID: " + strconv.FormatUint(userId, 10))
+
+	// UPDATE users SET LastLogin = datetime('now') WHERE DisplayName = ?
+	var instance Database
+	if instance := GetDBInstance(); instance.Driver == nil {
+		return nil, fmt.Errorf("Database driver is nil")
+	}
+
+	result, err := instance.Write(
+		fmt.Sprintf("UPDATE users SET LastLogin = '%s' WHERE UserID = ?", time.Now().Format("2006-01-02 15:04:05")), userId)
+
+	if err != nil {
+		util.PrintError("UpdateLastLoginTime: " + err.Error())
+		return nil, err
+	}
+
+	return result, nil
 }

@@ -33,7 +33,7 @@ type ConfigRequest struct {
 // NewServer initializes a new API server with the provided configuration.
 // Renamed config.Config to config.Cfg to avoid confusion with the Fiber Config struct
 func NewServer(cfg *config.Cfg) *fiber.App {
-	argon2Instance := middleware.NewArgon2().InitArgonWithSalt(middleware.GetSecretKey(), "salt")
+	argon2Instance := middleware.NewArgon2().InitArgonWithSalt(middleware.GetSecretKey(), "saltsalt")
 
 	// Configure the fiber server with values from the config file
 	app := fiber.New(fiber.Config{
@@ -41,24 +41,27 @@ func NewServer(cfg *config.Cfg) *fiber.App {
 		WriteTimeout: time.Duration(cfg.Network.WriteTimeout) * time.Second, // TODO: Add a way to check if the config values are valid
 	})
 
-	output := fmt.Sprintf("Server started with\n\tread timeout: %d\n\twrite timeout: %d\n", cfg.Network.ReadTimeout, cfg.Network.WriteTimeout)
+	output := fmt.Sprintf(
+		"Server started with\n\tread timeout: %d\n\twrite timeout: %d\n",
+		cfg.Network.ReadTimeout, cfg.Network.WriteTimeout)
+
 	fmt.Println(output)
 
 	// Middleware
 	app.Use(logger.New()) // Log every request
 
-	// Generate a secure secret key for JWT authentication. This is what the server signs the JWT tokens with.
-	// secretKey, err := cryptoutils.GenerateSecretKey(cryptoutils.GetBivrostJWTSecret())
-	// if err != nil {
-	// log.Fatalf("Error generating secret key: %v", err)
-	// }
+	fmt.Printf("Secret key: %s%s%s\n",
+		util.LightYellow, argon2Instance.GetPrintableKeyWithSalt(argon2Instance.Salt), util.Reset)
 
-	// Base64 encode the secret key
-	// key := base64.StdEncoding.EncodeToString([]byte(secretKey))
-	fmt.Println(util.ColorF(util.DarkYellow, "Secret key: %s", argon2Instance.GetPrintableKey()))
+	fmt.Printf("Argon2 hash: %s%s%s\n", util.LightYellow, argon2Instance.GetEncodedHash(), util.Reset)
 
-	// app.Use(middleware.AuthMiddleware(secretKey))
-	app.Get("/", middleware.Bouncer())
+	// For every path except the root, check if the user is authenticated
+	app.Use(func(c *fiber.Ctx) error {
+		if c.Path() != "/" && c.Path() != "/login" && c.Path() != "/register" {
+			return middleware.Bouncer()(c)
+		}
+		return c.Next()
+	})
 
 	// Setup routes
 	setupRoutes(app, cfg)
@@ -68,16 +71,15 @@ func NewServer(cfg *config.Cfg) *fiber.App {
 
 // setupRoutes configures all the routes for the API server.
 func setupRoutes(app *fiber.App, cfg *config.Cfg) {
-	app.Get("/", indexHandler)
-
-	// WebSocket route
-	app.Get("/ws", websocket.New(wsHandler))
+	app.Get("/", indexHandler)               // Root path
+	app.Get("/ws", websocket.New(wsHandler)) // WebSockets
 
 	app.Post("/config/add_source", func(c *fiber.Ctx) error {
 		c.Accepts("application/yaml", "application/json")
 		// Serialize the request body to a struct
 		var configRequest ConfigRequest
 		if err := c.BodyParser(&configRequest.Fields.Sources); err != nil {
+			util.PrintError("Error parsing request body: " + err.Error())
 			return err
 		}
 
@@ -85,12 +87,11 @@ func setupRoutes(app *fiber.App, cfg *config.Cfg) {
 
 		fmt.Println("ID" + util.ColorF(util.DarkYellow, "%s", updatedFields))
 
-		// TODO: Write the updated configuration to the file
+		// TODO: Check if this works
+		config.WriteConfig(cfg, "config.yaml")
 
 		return c.SendString("Configuration updated")
 	})
-
-	config.WriteConfig(cfg, "config.yaml")
 
 	// For the ThreatIntel module
 	app.Post("/api/v1/intel/", func(c *fiber.Ctx) error {
@@ -138,16 +139,7 @@ func setupRoutes(app *fiber.App, cfg *config.Cfg) {
 
 	app.Post("/login", middleware.BeginLogin)
 	app.Post("/register", middleware.BeginRegistration)
-
-	// app.Post("/login", middleware.BeginLogin /*handleAuth*/, func(c *fiber.Ctx) error {
-	// 	// Get the username and password from the request body
-	// 	username := c.FormValue("username")
-	// 	password := c.FormValue("password")
-	// }, middleware.BeginLogin(c))
-
-	// Threat Intel API routes
-	// app.Get("/api/v1/threats", getThreatsHandler)
-
+	app.Get("/auth", handleAuth)
 }
 
 // isAuthenticated checks if the user is authenticated.

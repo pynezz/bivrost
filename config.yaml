@@ -30,5 +30,6 @@ sources:
 network:
     read_timeout: 10
     write_timeout: 10
+    port: 3330
 users_database:
     path: users.db
