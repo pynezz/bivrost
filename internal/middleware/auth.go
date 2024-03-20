@@ -112,30 +112,6 @@ func Bouncer() fiber.Handler {
 	}
 }
 
-// GenerateToken generates a JWT token for a user.
-func GenerateToken(userID, secretKey string) (string, error) {
-	// Define token claims
-	claims := Claims{
-		UserID: userID,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(9 * time.Hour)), // Token expires in 9 hours (one work-day + one hour overtime 😄)
-			Issuer:    "Bachelorprosjekt",
-			Subject:   "UserAuthentication",
-		},
-	}
-
-	// Create a new JWT token
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-
-	// Sign the token with the secret key
-	signedToken, err := token.SignedString([]byte(secretKey))
-	if err != nil {
-		return "", err
-	}
-
-	return signedToken, nil
-}
-
 func Base64Decode(b string) string {
 	// Decode the base64 string
 	base64Decoded, err := base64.StdEncoding.DecodeString(b)

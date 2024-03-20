@@ -118,22 +118,6 @@ func setupRoutes(app *fiber.App, cfg *config.Cfg) {
 		key := q["key"]
 		fmt.Println("Key: ", key)
 
-		// This section should be placed in a separate function or in the auth middleware
-		if c.Params("id") == "test" {
-			token, err := middleware.GenerateToken("test", key)
-			if err != nil {
-				return c.SendStatus(fiber.StatusInternalServerError)
-			}
-
-			response := map[string]string{
-				"status": "ok",
-				"token":  token,
-			}
-
-			return c.SendString("Authenticated. Here's your session JWT: " + response["token"])
-		}
-		// ----------------------------
-
 		return c.SendStatus(fiber.StatusUnauthorized)
 	})
 
