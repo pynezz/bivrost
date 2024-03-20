@@ -89,7 +89,7 @@ func NewUserValidationError(message string) *UserValidationError {
 
 // This user will be sent back to the server, and then to the client as a JSON object
 type User struct {
-	UserID          uint64 `json:"id"` // As of now (13.03.24), this is set by the database. Should be set by bivrost. -[15.03.24]This is now fixed.
+	UserID          uint64 `json:"id"`
 	DisplayName     string `json:"displayname"`
 	CreatedAt       string `json:"createdat"`
 	UpdatedAt       string `json:"updatedat"`
@@ -457,11 +457,13 @@ func UpdateLastLoginTime(userId uint64) (sql.Result, error) {
 	util.PrintDebug("Updating last login time for user with ID: " + strconv.FormatUint(userId, 10))
 
 	// UPDATE users SET LastLogin = datetime('now') WHERE DisplayName = ?
-	var instance Database
-	if instance := GetDBInstance(); instance.Driver == nil {
+	// var instance Database
+	instance := GetDBInstance()
+	if instance.Driver == nil {
 		return nil, fmt.Errorf("Database driver is nil")
 	}
 
+	util.PrintDebug("writing to database")
 	result, err := instance.Write(
 		fmt.Sprintf("UPDATE users SET LastLogin = '%s' WHERE UserID = ?", time.Now().Format("2006-01-02 15:04:05")), userId)
 
@@ -471,4 +473,33 @@ func UpdateLastLoginTime(userId uint64) (sql.Result, error) {
 	}
 
 	return result, nil
+}
+
+func LoginSuccessHTML(u User, jwt string) string {
+	return fmt.Sprintf(`
+	<!DOCTYPE html>
+	<html lang="en">
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>Login success</title>
+		</head>
+		<body>
+		<h1>Login success</h1>
+		<i>%s</i>
+		<img src="%s" alt="Profile image" />
+		<h2>Username: %s</h2>
+		<h3>User ID: %d</h3>
+		<h3>Full username: %s</h3>
+		<h3>Role: %s</h3>
+		<h3>Session ID: %s</h3>
+		<h3>Auth method ID: %d</h3>
+		<h4 font-family: monospace;>Last login: %s</h4>
+		<h4 font-family: monospace;>Created at: %s</h4>
+		<h4 font-family: monospace;>Updated at: %s</h4>
+		<h4 font-family: monospace;>JWT Token: %s</h4>
+		</body>`,
+		time.Now().Format("2006-01-02 15:04:05"), u.ProfileImageUrl,
+		u.DisplayName, u.UserID, u.FirstName, u.Role, u.SessionId,
+		u.AuthMethodID, u.LastLogin, u.CreatedAt, u.UpdatedAt, jwt)
 }

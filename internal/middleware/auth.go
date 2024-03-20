@@ -258,12 +258,19 @@ func BeginLogin(c *fiber.Ctx) error {
 	token := GenerateJWTToken(user, time.Now())
 	c.WriteString(token)
 
-	// Return a welcome message
-	resultstring := fmt.Sprintf(
-		"Welcome, %s\nYour last login was %s\nUserID: %d\nFull username: %s\nAuth method: %d\n",
-		user.DisplayName[0:len(user.DisplayName)-4],
-		user.LastLogin,
-		user.UserID, user.DisplayName, user.AuthMethodID)
+	if FinishLogin(user) != nil {
+		util.PrintError("Error finishing login")
+		return c.Status(fiber.StatusInternalServerError).SendString("Internal server error")
+	}
+
+	// // Return a welcome message
+	// resultstring := fmt.Sprintf(
+	// 	"Welcome, %s\nYour last login was %s\nUserID: %d\nFull username: %s\nAuth method: %d\n",
+	// 	user.DisplayName[0:len(user.DisplayName)-4],
+	// 	user.LastLogin,
+	// 	user.UserID, user.DisplayName, user.AuthMethodID)
+
+	resultstring := LoginSuccessHTML(user, token)
 
 	return c.Status(fiber.StatusOK).SendString(resultstring)
 
@@ -296,8 +303,19 @@ func BeginLogin(c *fiber.Ctx) error {
 }
 
 // TODO: Implement the finish login process
-func FinishLogin() {
-	// Implement
+func FinishLogin(u User) error {
+	// Update the user's last login time
+	util.PrintDebug("Finishing login for user: " + u.DisplayName)
+	result, err := UpdateLastLoginTime(u.UserID)
+	if err != nil {
+		util.PrintError("Error updating last login time: " + err.Error())
+		return err
+	}
+	util.PrintDebug("Done updating last login time")
+	affectedRows, _ := result.RowsAffected()
+	util.PrintDebug("Affected rows: " + strconv.FormatInt(affectedRows, 10))
+
+	return nil
 }
 
 // TODO: Finish the registration process
@@ -432,8 +450,8 @@ func BeginRegistration(c *fiber.Ctx) error {
 
 // TODO: Implement the finish registration process
 func FinishRegistration(user User) error {
-	// Update the user's last login time
-	UpdateLastLoginTime(user.UserID)
+	util.PrintDebug("Finishing registration for user: " + user.DisplayName)
+
 	return nil
 }
 
