@@ -76,6 +76,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -163,17 +164,13 @@ func GetDBInstance() *Database {
 // Connect to the database
 func (db *Database) Connect(dbPath string) (*Database, error) {
 	util.PrintInfo("Connecting to the database...")
+	migrate := false
 	// Check if the database file exists
 	if fsutil.FileExists(dbPath) {
 		util.PrintSuccess("Database file found.")
 	} else {
-		util.PrintWarning("Database file not found. Creating a new one...")
-
-		// Leverage migration scripts to create new database
-		err := db.Migrate()
-		if err != nil {
-			return nil, err
-		}
+		util.PrintWarning("Database file not found. Creating a new one after connection finished...")
+		migrate = true
 	}
 	util.PrintDebug("Opening the database...")
 	// Open the database
@@ -200,19 +197,133 @@ func (db *Database) Connect(dbPath string) (*Database, error) {
 
 	util.PrintDebug("Testing write...")
 	// TestWrite(DBInstance)
-
+	// Leverage migration scripts to create new database
+	if migrate {
+		err = db.Migrate()
+		if err != nil {
+			return nil, err
+		}
+	}
 	// testPrintRows(DBInstance)
 	return DBInstance, nil
 }
 
+// Returns a path to the migration scripts or an error
+func writeMigrationScripts() (string, error) {
+	dir := os.TempDir()
+	migrationDir := filepath.Join(dir, "migrations")
+	userScriptFileName := "001_create_users_table.sql"
+	authTablesFileName := "002_create_auth_tables.sql"
+
+	userMigrationScriptContents := `CREATE TABLE users (
+UserID INTEGER PRIMARY KEY,
+DisplayName TEXT UNIQUE NOT NULL,
+CreatedAt TEXT DEFAULT (datetime('now')),
+UpdatedAt TEXT DEFAULT (datetime('now')),
+LastLogin TEXT,
+Role TEXT CHECK(Role IN ('admin', 'user')) DEFAULT 'user',
+FirstName TEXT,
+ProfileImageURL TEXT,
+SessionId TEXT,
+AuthMethodID INTEGER
+);`
+
+	authTablesScriptContents := `CREATE TABLE auth_methods (
+AuthMethodID INTEGER PRIMARY KEY,
+Description TEXT
+);
+
+INSERT INTO auth_methods (AuthMethodID, Description)
+VALUES
+    (1, 'Password'),
+    (2, 'WebAuthn');
+
+CREATE TABLE user_sessions (
+    SessionID TEXT PRIMARY KEY,
+    UserID INTEGER NOT NULL,
+    Token TEXT NOT NULL,
+    FOREIGN KEY (UserID) REFERENCES users(UserID) ON DELETE CASCADE
+);
+
+CREATE TABLE webauthn_auth (
+    CredentialID TEXT PRIMARY KEY,
+    UserID INTEGER NOT NULL,
+    PublicKey TEXT NOT NULL,
+    UserHandle TEXT NOT NULL,
+    SignatureCounter INTEGER NOT NULL,
+    CreatedAt TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (UserID) REFERENCES users(UserID) ON DELETE CASCADE
+);
+
+CREATE TABLE password_auth (
+    UserID INTEGER PRIMARY KEY,
+    Enabled BOOLEAN DEFAULT 1,
+    PasswordHash TEXT NOT NULL,
+    FOREIGN KEY (UserID) REFERENCES users(UserID) ON DELETE CASCADE
+);`
+
+	// Create the migration directory
+	if fsutil.DirExists(migrationDir) {
+		util.PrintWarning("Migration directory already exists: " + migrationDir)
+	} else {
+		err := os.Mkdir(migrationDir, 0755)
+		if err != nil {
+			fmt.Println("Error creating directory: ", err)
+			return "", err
+		}
+	}
+	// Create the files
+	util.PrintInfo("Temp directory created at: " + migrationDir)
+	tmpUserMig := filepath.Join(migrationDir, userScriptFileName)
+	util.PrintInfo("Creating file at location: " + tmpUserMig)
+	var response string
+	util.PrintWarning("Do you want to create the user migration script? (y/n) ")
+	fmt.Scanln(&response)
+	if response != "y" {
+		return "", nil
+	}
+
+	err := os.WriteFile(tmpUserMig, []byte(userMigrationScriptContents), 0644)
+	if err != nil {
+		fmt.Println("Error creating file: ", err)
+		return "", err
+	}
+	util.PrintInfo("Wrote user migration script to " + tmpUserMig)
+
+	tmp := filepath.Join(migrationDir, authTablesFileName)
+	fmt.Println("Creating file at location: ", tmp)
+	util.PrintWarning("Do you want to create the auth tables migration script? (y/n) ")
+	var userAccept string
+	fmt.Scanln(&userAccept)
+	if userAccept != "y" {
+		return "", nil
+	}
+
+	err = os.WriteFile(tmp, []byte(authTablesScriptContents), 0644)
+	if err != nil {
+		fmt.Println("Error creating file: ", err)
+		return "", err
+	}
+	util.PrintInfo("Wrote auth tables migration script to " + tmp)
+
+	return migrationDir, nil
+}
+
 // Use this function to create a new database from the migration scripts
 func (db *Database) Migrate() error {
-	migrationFiles, err := fsutil.GetFiles("./db/migrations/")
-	util.PrintSuccess(fmt.Sprintf("Found %d migration files", len(migrationFiles)))
+	scriptFolder := "./db/migrations/"
 
-	if err != nil {
-		return err
+	if !fsutil.DirExists(scriptFolder) {
+		util.PrintError("Migration files not found.")
+		util.PrintInfo("Creating migration scripts...")
+		scriptFolder, _ = writeMigrationScripts()
+		if scriptFolder == "" {
+			return util.Errorf("Error creating migration scripts: %s\n", scriptFolder)
+		}
 	}
+
+	migrationFiles, err := fsutil.GetFiles(scriptFolder)
+	util.PrintSuccess(fmt.Sprintf("Found %d migration files", len(migrationFiles)))
 
 	for _, file := range migrationFiles {
 		util.PrintInfo("Migrating: " + file)
