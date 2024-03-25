@@ -53,7 +53,9 @@ func main() {
 	}
 
 	// Testing the proto connection
-	go testProtoConnection()
+	// go testProtoConnection()
+	go testUDS()
+
 
 	// Load the config
 	cfg, err := config.LoadConfig(*flags.Params.ConfigPath)
@@ -134,6 +136,19 @@ func testDbConnection() {
 	util.PrintColorBold(util.LightGreen, "🎉 Database connected!")
 }
 
+// Standard port: 50051
 func testProtoConnection() {
-	connector.Initialize()
+	connector.InitProtobuf(50051)
+}
+
+func testUDS() {
+	util.PrintInfo("Testing UNIX domain socket connection...")
+	uds, err := connector.NewIPC("test", "Test socket")
+	if err != nil {
+		errorMsg := "main.go: could not connect to UNIX domain socket.\n" + err.Error()
+		util.PrintError(errorMsg)
+		return
+	}
+
+	uds.Initialize()
 }

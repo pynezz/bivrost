@@ -4,16 +4,46 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/pynezz/bivrost/internal/connector/proto"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 func main() {
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	// var sock *net.UnixConn
+
+	fmt.Println("Testing module connection...")
+	for i, arg := range os.Args {
+		switch arg {
+		case "proto":
+			fmt.Println("Testing gRPC connection...")
+			testProtoConnection()
+		case "uds":
+			fmt.Println("Testing UNIX domain socket connection...")
+			testUnixSocketIPC()
+
+		default:
+			fmt.Println("Parsing args...")
+			fmt.Printf("Arg %d: %s\n", i, arg)
+		}
+	}
+}
+
+func testProtoConnection() {
 	target := "localhost:50051"
 	fmt.Printf("Testing gRPC connection to %s...\n", target)
-	conn, err := grpc.Dial(target, grpc.WithInsecure(), grpc.WithBlock())
+
+	conn, err := grpc.Dial(
+		target, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock(),
+	)
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
@@ -41,4 +71,53 @@ func main() {
 		}
 		log.Printf("Response: %s", response.GetPayload())
 	}
+}
+
+// Connect to a UNIX domain socket
+// TODO: Fix
+func testUnixSocketIPC() *net.UnixConn {
+	path := "/tmp/bivrost/bivrost.sock"
+	fmt.Printf("Testing UNIX domain socket connection to %s...\n", path)
+
+	socket, err := net.DialUnix("unix", nil, &net.UnixAddr{Name: path, Net: "unix"});
+	if err != nil {
+		log.Fatalf("could not connect: %v", err)
+	}
+
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+        <-c
+        os.Remove(path)
+        os.Exit(1)
+    }()
+
+    for {
+		buf := make([]byte, 4096)
+		buf[:len(buf)] = []byte("Hello, World!\n")
+
+        // Accept an incoming connection.
+        conn, err := socket.Write(buf)
+        if err != nil {
+            log.Fatal(err)
+        }
+
+        // Handle the connection in a separate goroutine.
+        go func(conn net.Conn) {
+            defer conn.Close()
+            // Create a buffer for incoming data.
+
+            // Read data from the connection.
+            n, err := conn.Read(buf)
+            if err != nil {
+                log.Fatal(err)
+            }
+
+            // Echo the data back to the connection.
+            _, err = conn.Write(buf[:n])
+            if err != nil {
+                log.Fatal(err)
+            }
+        }(conn)
+    }
 }

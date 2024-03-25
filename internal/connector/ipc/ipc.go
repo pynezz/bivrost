@@ -37,8 +37,14 @@ const (
 	protocol
 )
 
-// UDSServer represents a UNIX domain socket server
-type UDSServer struct {
+var Socks map[string]*UnixSocket
+
+func init() {
+	Socks = make(map[string]*UnixSocket)
+}
+
+// UnixSocket represents a UNIX domain socket server
+type UnixSocket struct {
 	name string // For naming the server, e.g. "Module IPC Threat Intel"
 	desc string // For describing the server, e.g. "IPC server for the Threat Intel Module"
 
@@ -51,36 +57,94 @@ type UDSServer struct {
 	// syscall  int              // System call
 
 	// Run uintptr // Run the server
+
+	IsConnected bool            // Is the server connected
+	connection  *net.Conn       // Connection to the server
 }
 
-func NewSocket(name string, desc string) (*UDSServer, error) {
-	tmpDir, err := os.MkdirTemp("/tmp", "bivrost_ipc_sock_*")
+// Will establish a connection to the socket at the given path
+// with the network protocol "unix" as specified in the net package
+// func (s *UnixSocket) ConnectSocket() (*net.Conn, error) {
+// 	// Connect to the socket
+// 	conn, err := net.Dial(AF_UNIX, path); if err != nil {
+// 		return nil, err
+// 	}
+
+// 	defer conn.Close()
+
+// 	fmt.Fprintf(conn, "Hello\n")
+
+// 	return &conn, nil
+// }
+
+func (s *UnixSocket) GetConn() *net.Conn {
+	return s.connection
+}
+
+func (s *UnixSocket) Listen() error {
+	l, err := net.Listen(s.af, s.path); if err != nil {
+		return err
+	}
+	defer l.Close()
+
+	fmt.Println("Listening on ", s.path)
+
+
+	for {
+		fmt.Println("Waiting for connection...")
+		c, err := l.Accept()
+		if err != nil {
+			log.Fatalf("failed to accept: %v", err)
+		}
+
+		fmt.Println("Incoming connection: ", c.LocalAddr().String())
+		go s.handleListener(c)
+	}
+}
+
+
+// NewSocket creates a new UNIX domain socket server
+func NewSocket(name string, desc string) (*UnixSocket, error) {
+	tmpDir := "/tmp/bivrost"
+	err := os.MkdirAll(tmpDir, os.ModePerm)
 	if err != nil {
 		return nil, err
 	}
-	defer os.RemoveAll(tmpDir)
 
 	fmt.Println("Temp dir: ", tmpDir)
 
-	path := path.Join(tmpDir, "bivrost-"+name+".sock")
+	// path := path.Join(tmpDir, "bivrost-"+name+".sock")
+	path := path.Join(tmpDir, "bivrost.sock")
 
 	fmt.Println("Full path: ", path)
 
-	s := &UDSServer{
+	var choice string // For the choice of the socket type
+	_, err = fmt.Sscanf("Do you want to continue? [Y/n] > ", "%s", &choice)
+	if err != nil {
+		return nil, err
+	}
+	if choice[0] == 'n' {
+		return nil, fmt.Errorf("[aborted] user chose to exit")
+	}
+
+	s := &UnixSocket{
 		name: name,
 		desc: desc,
 		af:   AF_UNIX,
 		path: path,
+		connection: nil,
 	}
 
 	return s, nil
 }
 
 // StartUDSServer starts the UDS server
-func (s *UDSServer) Initialize() {
-	util.PrintInfo("Starting UNIX Domain Sockets server...")
-	l, err := net.Listen(s.af, s.path); if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+func (s *UnixSocket) Initialize() error {
+	util.PrintInfo("Starting UNIX Domain Sockets SERVER...")
+
+	l, err := net.Listen(s.af, s.path)
+	if err != nil {
+		return err
 	}
 	defer l.Close()
 
@@ -93,17 +157,21 @@ func (s *UDSServer) Initialize() {
 	}
 }
 
+func (s *UnixSocket) handleListener(c net.Conn) {
+	log.Printf("Received connection from %v", c.LocalAddr())
+	fmt.Fprintf(c, "Hello, %s\n", c.RemoteAddr())
+	c.Close()
+}
+
 // handleConnection handles the connection
-func (s *UDSServer) handleConnection(c net.Conn) {
+func (s *UnixSocket) handleConnection(c net.Conn) {
 	log.Printf("Received connection from %v", c.RemoteAddr())
 	fmt.Fprintf(c, "Hello, %s\n", c.RemoteAddr())
 	c.Close()
 }
 
-func (s *UDSServer) Cleanup() {
-	// Cleanup the server
-}
+func (s *UnixSocket) Cleanup() {
 
-func (s *UDSServer) IsNil() bool {
-	return s == nil
+	// Remove the socket file
+	os.RemoveAll(s.path)
 }
