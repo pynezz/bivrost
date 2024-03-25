@@ -130,10 +130,7 @@ type Database struct {
 	Driver *sql.DB
 }
 
-var DBInstance *Database
-
-// var instance *Database // The global database instance
-var sqlInstance *sql.DB // The global database connection
+var DBInstance *Database // The global database instance
 
 // https://gosamples.dev/sqlite-intro/
 
@@ -195,8 +192,6 @@ func (db *Database) Connect(dbPath string) (*Database, error) {
 
 	db.Driver = driver
 
-	util.PrintDebug("Testing write...")
-	// TestWrite(DBInstance)
 	// Leverage migration scripts to create new database
 	if migrate {
 		err = db.Migrate()
