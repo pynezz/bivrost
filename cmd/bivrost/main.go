@@ -56,7 +56,6 @@ func main() {
 	// go testProtoConnection()
 	go testUDS()
 
-
 	// Load the config
 	cfg, err := config.LoadConfig(*flags.Params.ConfigPath)
 	if err != nil {
@@ -150,5 +149,9 @@ func testUDS() {
 		return
 	}
 
+	util.PrintColor(util.BgCyan, "Connected to UNIX domain socket.")
 	uds.Initialize()
+
+	util.PrintColor(util.BgCyan, "Listening on UNIX domain socket...")
+	uds.Listen()
 }

@@ -58,8 +58,8 @@ type UnixSocket struct {
 
 	// Run uintptr // Run the server
 
-	IsConnected bool            // Is the server connected
-	connection  *net.Conn       // Connection to the server
+	IsConnected bool      // Is the server connected
+	connection  *net.Conn // Connection to the server
 }
 
 // Will establish a connection to the socket at the given path
@@ -82,13 +82,13 @@ func (s *UnixSocket) GetConn() *net.Conn {
 }
 
 func (s *UnixSocket) Listen() error {
-	l, err := net.Listen(s.af, s.path); if err != nil {
+	l, err := net.Listen(s.af, s.path)
+	if err != nil {
 		return err
 	}
 	defer l.Close()
 
 	fmt.Println("Listening on ", s.path)
-
 
 	for {
 		fmt.Println("Waiting for connection...")
@@ -101,7 +101,6 @@ func (s *UnixSocket) Listen() error {
 		go s.handleListener(c)
 	}
 }
-
 
 // NewSocket creates a new UNIX domain socket server
 func NewSocket(name string, desc string) (*UnixSocket, error) {
@@ -128,10 +127,10 @@ func NewSocket(name string, desc string) (*UnixSocket, error) {
 	}
 
 	s := &UnixSocket{
-		name: name,
-		desc: desc,
-		af:   AF_UNIX,
-		path: path,
+		name:       name,
+		desc:       desc,
+		af:         AF_UNIX,
+		path:       path,
 		connection: nil,
 	}
 

@@ -75,49 +75,58 @@ func testProtoConnection() {
 
 // Connect to a UNIX domain socket
 // TODO: Fix
+// Connect to a UNIX domain socket
 func testUnixSocketIPC() *net.UnixConn {
 	path := "/tmp/bivrost/bivrost.sock"
 	fmt.Printf("Testing UNIX domain socket connection to %s...\n", path)
 
-	socket, err := net.DialUnix("unix", nil, &net.UnixAddr{Name: path, Net: "unix"});
+	socket, err := net.Dial("unix", path)
 	if err != nil {
 		log.Fatalf("could not connect: %v", err)
 	}
 
+	fmt.Println("Connected to UNIX domain socket")
+
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
-        <-c
-        os.Remove(path)
-        os.Exit(1)
-    }()
+		<-c
+		os.Remove(path)
+		os.Exit(1)
+	}()
 
-    for {
+	for {
 		buf := make([]byte, 4096)
-		buf[:len(buf)] = []byte("Hello, World!\n")
+		copy(buf, []byte("Hello, World!\n"))
+		// Accept an incoming connection.
+		conn, err := socket.Write(buf)
+		if err != nil {
+			log.Fatal(err)
+		}
 
-        // Accept an incoming connection.
-        conn, err := socket.Write(buf)
-        if err != nil {
-            log.Fatal(err)
-        }
+		fmt.Printf("Sent %d bytes\n", conn)
 
-        // Handle the connection in a separate goroutine.
-        go func(conn net.Conn) {
-            defer conn.Close()
-            // Create a buffer for incoming data.
+		// Handle the connection in a separate goroutine.
+		go func(conn net.Conn) {
+			defer conn.Close()
+			// Create a buffer for incoming data.
 
-            // Read data from the connection.
-            n, err := conn.Read(buf)
-            if err != nil {
-                log.Fatal(err)
-            }
+			// Read data from the connection.
+			n, err := socket.Read(buf)
+			if err != nil {
+				log.Fatal(err)
+			}
 
-            // Echo the data back to the connection.
-            _, err = conn.Write(buf[:n])
-            if err != nil {
-                log.Fatal(err)
-            }
-        }(conn)
-    }
+			// Echo the data back to the connection.
+			_, err = conn.Write(buf[:n])
+			if err != nil {
+				log.Fatal(err)
+			}
+			fmt.Printf("Received %d bytes\n", n)
+			fmt.Printf("Received: %s", buf[:n])
+
+			fmt.Printf("\033[0;32m%s\033[0m\n", "Received: "+string(buf[:n]))
+
+		}(socket)
+	}
 }
