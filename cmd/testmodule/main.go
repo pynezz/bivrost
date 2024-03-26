@@ -35,6 +35,9 @@ func main() {
 			fmt.Printf("Arg %d: %s\n", i, arg)
 		}
 	}
+	fmt.Println("End of program. Waiting for SIGINT or SIGTERM...")
+	<-c
+	fmt.Println("Exiting...")
 }
 
 func testProtoConnection() {
