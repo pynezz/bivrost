@@ -11,25 +11,24 @@ VERSION=$(shell git describe --tags --always --long)
 
 .PHONY: all test clean
 
+$(LINUX): cmd/bivrost/main.go
+	CGO_ENABLED=1 go build -v -o $(LINUX) -tags linux -ldflags="-s -w -X main.version=$(VERSION)" ./cmd/bivrost/main.go
+
+$(TEST_LINUX): cmd/testmodule/main.go
+	CGO_ENABLED=1 go build -v -o $(TEST_LINUX) -tags linux -ldflags="-s -w -X main.version=$(VERSION)" ./cmd/testmodule/main.go
+
+$(WINDOWS): cmd/bivrost/main.go
+	GOOS=windows GOARCH=amd64 CGO_ENABLED=1 go build -v -o $(WINDOWS) -ldflags="-s -w -X main.version=$(VERSION)" ./cmd/bivrost/main.go
+
+$(TEST_WINDOWS): cmd/testmodule/main.go
+	GOOS=windows GOARCH=amd64 CGO_ENABLED=1 go build -v -o $(TEST_WINDOWS) -ldflags="-s -w -X main.version=$(VERSION)" ./cmd/testmodule/main.go
+
 # Build targets
 windows: $(WINDOWS)
 linux: $(LINUX)
-
-
-
-$(LINUX):
-	CGO_ENABLED=1 go build -v -o $(LINUX) -tags linux -ldflags="-s -w -X main.version=$(VERSION)" ./cmd/bivrost/main.go
-$(TEST_LINUX):
-	CGO_ENABLED=1 go build -v -o $(TEST_LINUX) -tags linux -ldflags="-s -w -X main.version=$(VERSION)" ./cmd/testmodule/main.go
-
-$(WINDOWS): GOOS=windows GOARCH=amd64 CGO_ENABLED=1 go build -v -o $(WINDOWS) -ldflags="-s -w -X main.version=$(VERSION)" ./cmd/bivrost/main.go
-$(TEST_WINDOWS): GOOS=windows GOARCH=amd64 CGO_ENABLED=1 go build -v -o $(TEST_WINDOWS) -ldflags="-s -w -X main.version=$(VERSION)" ./cmd/testmodule/main.go
-
-test:
-	go test ./...
-
 prototype: $(TEST_LINUX) $(LINUX)
 
+test: go test ./...
 
 build: windows linux
 	@echo $(VERSION)
@@ -37,9 +36,13 @@ build: windows linux
 
 run: $(LINUX) && ./$(LINUX)
 
-run-prototype: $(TEST_LINUX)
+run-prototype: # Run prototype
+	$(TEST_LINUX)
 	./$(TEST_LINUX)
 
-clean:
+clean:	## Remove build files
 	go clean
 	rm $(WINDOWS) $(LINUX) $(TEST_WINDOWS) $(TEST_LINUX)
+
+help: ## Display available commands
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'

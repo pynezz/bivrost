@@ -5,14 +5,17 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
+	"path"
 	"strconv"
+	"syscall"
 
 	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/pynezz/bivrost/internal/api"
 	"github.com/pynezz/bivrost/internal/config"
-	"github.com/pynezz/bivrost/internal/connector"
 	"github.com/pynezz/bivrost/internal/fsutil"
+	"github.com/pynezz/bivrost/internal/ipc/ipcserver"
 	"github.com/pynezz/bivrost/internal/middleware"
 	"github.com/pynezz/bivrost/internal/tui"
 	"github.com/pynezz/bivrost/internal/util"
@@ -136,22 +139,44 @@ func testDbConnection() {
 }
 
 // Standard port: 50051
-func testProtoConnection() {
-	connector.InitProtobuf(50051)
-}
+// func testProtoConnection() {
+// 	connector.InitProtobuf(50051)
+// }
 
 func testUDS() {
 	util.PrintInfo("Testing UNIX domain socket connection...")
-	uds, err := connector.NewIPC("test", "Test socket")
-	if err != nil {
-		errorMsg := "main.go: could not connect to UNIX domain socket.\n" + err.Error()
-		util.PrintError(errorMsg)
+
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+
+	// Ensuring that the correct temp path directory is used regardless of the operating system
+	tmpDir := os.TempDir()
+	bivrostTmpDir := path.Join(tmpDir, "bivrost")
+	socketPath := path.Join(bivrostTmpDir, "bivrost.sock")
+
+	util.PrintSuccess("New UNIX domain socket location: " + socketPath)
+	ipcServer := ipcserver.NewIPCServer(socketPath)
+	ok := ipcServer.InitServerSocket()
+	if !ok {
 		return
 	}
 
-	util.PrintColor(util.BgCyan, "Connected to UNIX domain socket.")
-	uds.Initialize()
+	go ipcServer.Listen()
 
-	util.PrintColor(util.BgCyan, "Listening on UNIX domain socket...")
-	uds.Listen()
+	util.PrintColorf(util.BgGray, "Waiting for SIGINT or SIGTERM... Press Ctrl+C to exit.")
+	<-c
+	ipcserver.Cleanup()
+	// uds, err := connector.NewIPC("test", "Test socket")
+	// if err != nil {
+	// 	errorMsg := "main.go: could not connect to UNIX domain socket.\n" + err.Error()
+	// 	util.PrintError(errorMsg)
+	// 	return
+	// }
+
+	// util.PrintColor(util.BgCyan, "Connected to UNIX domain socket.")
+	// uds.Initialize()
+
+	// util.PrintColor(util.BgCyan, "Listening on UNIX domain socket...")
+
+	// uds.Listen()
 }

@@ -4,13 +4,14 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"net"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"github.com/pynezz/bivrost/internal/connector/proto"
+	"github.com/pynezz/bivrost/internal/ipc/ipcclient"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -28,7 +29,37 @@ func main() {
 			testProtoConnection()
 		case "uds":
 			fmt.Println("Testing UNIX domain socket connection...")
-			testUnixSocketIPC()
+			// testUnixSocketIPC()
+			client := ipcclient.NewIPCClient()
+			err := client.Connect("TestModule")
+			if err != nil {
+				fmt.Println(err)
+				fmt.Println("Whoops..")
+			}
+			fmt.Println("Connected")
+
+			// Send messages to the server, and listen for responses
+			go func() {
+				for {
+					var message string
+					fmt.Println("Enter a message to send to the server (or type 'exit' to quit):")
+					fmt.Scanln(&message)
+
+					if message == "exit" {
+						client.Close()
+						signal.Stop(c)
+						c <- os.Interrupt // Trigger graceful shutdown
+						return
+					}
+					client.SendMessage(message)
+				}
+
+			}()
+
+			// Wait for exit signal
+			<-c
+			fmt.Println("Exiting gracefully...")
+			return
 
 		default:
 			fmt.Println("Parsing args...")
@@ -79,57 +110,57 @@ func testProtoConnection() {
 // Connect to a UNIX domain socket
 // TODO: Fix
 // Connect to a UNIX domain socket
-func testUnixSocketIPC() *net.UnixConn {
-	path := "/tmp/bivrost/bivrost.sock"
-	fmt.Printf("Testing UNIX domain socket connection to %s...\n", path)
+// func testUnixSocketIPC() *net.UnixConn {
+// 	path := "/tmp/bivrost/bivrost.sock"
+// 	fmt.Printf("Testing UNIX domain socket connection to %s...\n", path)
 
-	socket, err := net.Dial("unix", path)
-	if err != nil {
-		log.Fatalf("could not connect: %v", err)
-	}
+// 	socket, err := net.Dial("unix", path)
+// 	if err != nil {
+// 		log.Fatalf("could not connect: %v", err)
+// 	}
 
-	fmt.Println("Connected to UNIX domain socket")
+// 	fmt.Println("Connected to UNIX domain socket")
 
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-c
-		os.Remove(path)
-		os.Exit(1)
-	}()
+// 	c := make(chan os.Signal, 1)
+// 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+// 	go func() {
+// 		<-c
+// 		os.Remove(path)
+// 		os.Exit(1)
+// 	}()
 
-	for {
-		buf := make([]byte, 4096)
-		copy(buf, []byte("Hello, World!\n"))
-		// Accept an incoming connection.
-		conn, err := socket.Write(buf)
-		if err != nil {
-			log.Fatal(err)
-		}
+// 	for {
+// 		buf := make([]byte, 4096)
+// 		copy(buf, []byte("Hello, World!\n"))
+// 		// Accept an incoming connection.
+// 		conn, err := socket.Write(buf)
+// 		if err != nil {
+// 			log.Fatal(err)
+// 		}
 
-		fmt.Printf("Sent %d bytes\n", conn)
+// 		fmt.Printf("Sent %d bytes\n", conn)
 
-		// Handle the connection in a separate goroutine.
-		go func(conn net.Conn) {
-			defer conn.Close()
-			// Create a buffer for incoming data.
+// 		// Handle the connection in a separate goroutine.
+// 		go func(conn net.Conn) {
+// 			defer conn.Close()
+// 			// Create a buffer for incoming data.
 
-			// Read data from the connection.
-			n, err := socket.Read(buf)
-			if err != nil {
-				log.Fatal(err)
-			}
+// 			// Read data from the connection.
+// 			n, err := socket.Read(buf)
+// 			if err != nil {
+// 				log.Fatal(err)
+// 			}
 
-			// Echo the data back to the connection.
-			_, err = conn.Write(buf[:n])
-			if err != nil {
-				log.Fatal(err)
-			}
-			fmt.Printf("Received %d bytes\n", n)
-			fmt.Printf("Received: %s", buf[:n])
+// 			// Echo the data back to the connection.
+// 			_, err = conn.Write(buf[:n])
+// 			if err != nil {
+// 				log.Fatal(err)
+// 			}
+// 			fmt.Printf("Received %d bytes\n", n)
+// 			fmt.Printf("Received: %s", buf[:n])
 
-			fmt.Printf("\033[0;32m%s\033[0m\n", "Received: "+string(buf[:n]))
+// 			fmt.Printf("\033[0;32m%s\033[0m\n", "Received: "+string(buf[:n]))
 
-		}(socket)
-	}
-}
+// 		}(socket)
+// 	}
+// }
