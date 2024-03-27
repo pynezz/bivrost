@@ -55,6 +55,39 @@ const (
 	BgGray   = "\033[47m"
 )
 
+// Cursor movement
+const (
+	CursorUp    = "\033[A"
+	CursorDown  = "\033[B"
+	CursorRight = "\033[C"
+	CursorLeft  = "\033[D"
+)
+
+// Terminal control
+const (
+	ClearScreen = "\033[2J"
+	ClearLine   = "\033[K"
+	Backspace   = "\b"
+	Delete      = "\033[3~"
+	Enter       = "\r"
+	Tab         = "\t"
+
+	// Cursor positioning
+	Home     = "\033[H"
+	Position = "\033[%d;%dH"
+
+	// Save and restore cursor position
+	SaveCursor    = "\033[s"
+	RestoreCursor = "\033[u"
+
+	// Hide and show cursor
+	HideCursor = "\033[?25l"
+	ShowCursor = "\033[?25h"
+
+	// Overwrite the current line
+	Overwrite = "\033[1A\033[2K"
+)
+
 // PrintSuccess prints a success message to the console
 func PrintSuccess(msg string) {
 	fmt.Printf("%s[+]%s %s\n", Green, Reset, msg)

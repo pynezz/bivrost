@@ -1,5 +1,6 @@
 /*
   IPC Package provides the IPC communication between the connector and the other modules.
+  * THIS WHOLE FILE ALREADY NEEDS REFACTORING
 */
 
 package ipc
@@ -30,20 +31,14 @@ const (
 	Timeout = 1 * time.Second
 )
 
-const (
-	// Bit flags for the socket type
-	module = 0 << iota // Module
-	format
-	protocol
-)
-
-var Socks map[string]*UnixSocket
+var Socks map[string]*UnixSocket // NB! Probably not needed
 
 func init() {
-	Socks = make(map[string]*UnixSocket)
+	Socks = make(map[string]*UnixSocket) // NB! Probably not needed
 }
 
 // UnixSocket represents a UNIX domain socket server
+// NB! Probably not needed
 type UnixSocket struct {
 	name string // For naming the server, e.g. "Module IPC Threat Intel"
 	desc string // For describing the server, e.g. "IPC server for the Threat Intel Module"
@@ -77,6 +72,7 @@ type UnixSocket struct {
 // 	return &conn, nil
 // }
 
+// NB! Probably not needed
 func (s *UnixSocket) GetConn() *net.Conn {
 	return s.connection
 }

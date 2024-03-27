@@ -53,9 +53,7 @@ func main() {
 					}
 					client.SendMessage(message)
 				}
-
 			}()
-
 			// Wait for exit signal
 			<-c
 			fmt.Println("Exiting gracefully...")
@@ -105,6 +103,7 @@ func testProtoConnection() {
 		}
 		log.Printf("Response: %s", response.GetPayload())
 	}
+	// <-ticker.C
 }
 
 // Connect to a UNIX domain socket

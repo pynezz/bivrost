@@ -31,6 +31,8 @@ import (
 // 7. It creates a new server and listens on port 3000.
 
 func main() {
+
+	c := make(chan os.Signal, 1)
 	// Print the startup header
 	tui.Header.Color = util.Cyan
 	tui.Header.PrintHeader()
@@ -101,6 +103,8 @@ func main() {
 	// Create the web server
 	app := api.NewServer(cfg)
 	app.Listen(":" + strconv.Itoa(port))
+
+	<-c
 }
 
 const dbPath = "users.db" // Testing purposes. This should be in the config file
@@ -163,9 +167,12 @@ func testUDS() {
 
 	go ipcServer.Listen()
 
-	util.PrintColorf(util.BgGray, "Waiting for SIGINT or SIGTERM... Press Ctrl+C to exit.")
+	util.PrintItalic("Waiting for SIGINT or SIGTERM... Press Ctrl+C to exit.")
 	<-c
+
 	ipcserver.Cleanup()
+
+	fmt.Println("Done cleaning up. Exiting...")
 	// uds, err := connector.NewIPC("test", "Test socket")
 	// if err != nil {
 	// 	errorMsg := "main.go: could not connect to UNIX domain socket.\n" + err.Error()
