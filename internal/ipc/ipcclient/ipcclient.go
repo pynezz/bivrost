@@ -43,6 +43,7 @@ func init() {
 	gob.Register(&ipc.IPCRequest{})
 	gob.Register(&ipc.IPCMessage{})
 	gob.Register(&ipc.IPCHeader{})
+	gob.Register(&ipc.IPCMessageId{})
 }
 
 // Set description with format string for easier type conversion

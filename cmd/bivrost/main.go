@@ -32,7 +32,15 @@ import (
 
 func main() {
 
-	c := make(chan os.Signal, 1)
+	// Setting up signal handling to catch CTRL+C and other termination signals
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		sig := <-sigChan
+		fmt.Printf("Received signal: %s\n", sig)
+		os.Exit(0)
+	}()
 	// Print the startup header
 	tui.Header.Color = util.Cyan
 	tui.Header.PrintHeader()
@@ -105,8 +113,8 @@ func main() {
 	app.Listen(":" + strconv.Itoa(port))
 
 	util.PrintItalic("[main.go] Waiting for SIGINT or SIGTERM... Press Ctrl+C to exit.")
-	<-c
 	util.PrintItalic("[main.go] Exiting...")
+
 }
 
 const dbPath = "users.db" // Testing purposes. This should be in the config file

@@ -10,6 +10,8 @@ import (
 	"log"
 	"net"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/pynezz/bivrost/internal/ipc"
 	"github.com/pynezz/bivrost/internal/util"
@@ -50,23 +52,6 @@ var connections Connections
 
 // (i) ^^ likely not needed ^^ -- <-
 
-type ipcRequest struct {
-	MessageSignature []byte     // The message signature, used to declare an ipcRequest
-	Header           ipcHeader  // The header - containing type and identifier
-	Message          ipcMessage // The message
-	Checksum32       int        // Checksum of the message byte data
-}
-
-type ipcHeader struct {
-	Identifier  [4]byte // Identifier of the module
-	MessageType byte    // Type of the message
-}
-
-type ipcMessage struct {
-	Data       []byte // Data of the message
-	StringData string // String representation of the data if applicable
-}
-
 func init() {
 	IDENTIFIERS = map[string][]byte{
 		"threat_intel": THREAT_INTEL,
@@ -75,13 +60,7 @@ func init() {
 	gob.Register(ipc.IPCRequest{})
 	gob.Register(ipc.IPCMessage{})
 	gob.Register(ipc.IPCHeader{})
-
-	// MSGTYPE = map[string]byte{
-	// 	"request":  0x01,
-	// 	"response": 0x02,
-	// }
-	connections = Connections{}                       // (i) <- likely not needed
-	connections.sockets = make(map[string]*IPCServer) // (i) <- likely not needed
+	gob.Register(ipc.IPCMessageId{})
 }
 
 func NewIPCServer(path string) *IPCServer {
@@ -129,16 +108,16 @@ func (s *IPCServer) Listen() {
 }
 
 func Cleanup() {
-	for _, server := range connections.sockets {
-		util.PrintItalic("Cleaning up IPC server: " + server.path)
-		err := os.Remove(server.path)
-		if err != nil {
-			util.PrintError("Cleanup(): " + err.Error())
-		}
+	// for _, server := range connections.sockets {
+	// 	util.PrintItalic("Cleaning up IPC server: " + server.path)
+	// 	err := os.Remove(server.path)
+	// 	if err != nil {
+	// 		util.PrintError("Cleanup(): " + err.Error())
+	// 	}
 
-		util.PrintItalic("Closing connection: " + server.conn.Addr().String())
-		server.conn.Close()
-	}
+	// 	util.PrintItalic("Closing connection: " + server.conn.Addr().String())
+	// 	server.conn.Close()
+	// }
 	util.PrintItalic("IPC server cleanup complete")
 }
 
@@ -279,6 +258,8 @@ func handleConnection(c net.Conn) {
 	util.PrintColorf(util.LightCyan, "[🔌SOCKETS] Handling connection...")
 	reader := bufio.NewReader(c) //! Might be an issue here with the underlying reader reading more than just the struct sizes
 	//! // TODO: Test with just the c connection
+	x := make(chan os.Signal, 1)
+	signal.Notify(x, os.Interrupt, syscall.SIGTERM)
 
 	for {
 		request, err := parseConnection(c)
@@ -316,6 +297,7 @@ func handleConnection(c net.Conn) {
 		// Example response
 		c.Write([]byte("ACK\n"))
 	}
+	<-x
 }
 
 type module struct {
