@@ -104,7 +104,9 @@ func main() {
 	app := api.NewServer(cfg)
 	app.Listen(":" + strconv.Itoa(port))
 
+	util.PrintItalic("[main.go] Waiting for SIGINT or SIGTERM... Press Ctrl+C to exit.")
 	<-c
+	util.PrintItalic("[main.go] Exiting...")
 }
 
 const dbPath = "users.db" // Testing purposes. This should be in the config file

@@ -32,3 +32,6 @@
 # Databases
 *.db
 *.sqlite
+
+# GPG
+*.gpg

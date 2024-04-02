@@ -88,6 +88,83 @@ const (
 	Overwrite = "\033[1A\033[2K"
 )
 
+const (
+	RoundedTopLeft     = "╭"
+	RoundedTopRight    = "╮"
+	RoundedBottomLeft  = "╰"
+	RoundedBottomRight = "╯"
+	RoundedHoriz       = "─"
+	RoundedVert        = "│"
+)
+
+func SPrintRoundedTop(width int) string {
+	PrintDebug("UTIL: SPrintRoundedTop width: " + fmt.Sprintf("%d", width))
+	rtop := ""
+	for i := 0; i < width-2; i++ {
+		rtop += RoundedHoriz
+	}
+	return fmt.Sprintf("%s%s%s", RoundedTopLeft, rtop, RoundedTopRight)
+}
+
+func SPrintRoundedBottom(width int) string {
+	rbottom := ""
+	for i := 0; i < width-2; i++ {
+		rbottom += RoundedHoriz
+	}
+	return fmt.Sprintf("%s%s%s", RoundedBottomLeft, rbottom, RoundedBottomRight)
+}
+
+func PrintRoundedTop(width int) {
+	fmt.Print(RoundedTopLeft)
+	for i := 0; i < width-2; i++ {
+		fmt.Print(RoundedHoriz)
+	}
+	fmt.Print(RoundedTopRight)
+}
+
+func PrintRoundedBottom(width int) {
+	fmt.Print(RoundedBottomLeft)
+	for i := 0; i < width-2; i++ {
+		fmt.Print(RoundedHoriz)
+	}
+	fmt.Print(RoundedBottomRight)
+}
+
+// FormatRoundedBox formats a string into a rounded box
+// ! Do not spend a lot of time on this, it is not important
+func FormatRoundedBox(content string) string {
+	tmpW := 0 // Temporary width
+	w := 0    // Actual final width
+	// lines := 0 // Number of lines
+	result := ""
+
+	for i, c := range content {
+		if c == '\n' {
+			if w > tmpW {
+				w = tmpW
+			}
+			result += fmt.Sprintf("%s %s %s\n", RoundedVert, content[i-tmpW:i], RoundedVert) // Should be │ content │
+			// It might not be '\n', but \x00 or something else
+			//! // TODO: Check formatting here
+
+			tmpW = 0
+			// lines++
+		} else {
+			tmpW++
+		}
+	}
+	if w == 0 {
+		w = tmpW // If there are no newlines
+	}
+
+	tmpRes := result // Not sure if needed, but made most sense to me
+
+	// Add borders top and bottom now that the width is known
+	result += SPrintRoundedTop(w) + tmpRes + SPrintRoundedBottom(w)
+
+	return result
+}
+
 // PrintSuccess prints a success message to the console
 func PrintSuccess(msg string) {
 	fmt.Printf("%s[+]%s %s\n", Green, Reset, msg)
@@ -122,7 +199,7 @@ func PrintInfo(msg string) {
 
 // PrintWarning prints a warning message to the console
 func PrintWarning(msg string) {
-	fmt.Printf("%s[-]%s %s\n", Yellow, Reset, msg)
+	fmt.Printf("%s⚠️%s %s\n", Yellow, Reset, msg)
 }
 
 // PrintDebug prints a debug message to the console

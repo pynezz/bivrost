@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/pynezz/bivrost/internal/connector/proto"
+	"github.com/pynezz/bivrost/internal/ipc"
 	"github.com/pynezz/bivrost/internal/ipc/ipcclient"
 
 	"google.golang.org/grpc"
@@ -31,7 +32,7 @@ func main() {
 			fmt.Println("Testing UNIX domain socket connection...")
 			// testUnixSocketIPC()
 			client := ipcclient.NewIPCClient()
-			err := client.Connect("TestModule")
+			err := client.Connect("bivrost") // Connect to the UNIX domain socket
 			if err != nil {
 				fmt.Println(err)
 				fmt.Println("Whoops..")
@@ -40,6 +41,9 @@ func main() {
 
 			// Send messages to the server, and listen for responses
 			go func() {
+
+				// Create new module
+
 				for {
 					var message string
 					fmt.Println("Enter a message to send to the server (or type 'exit' to quit):")
@@ -51,7 +55,14 @@ func main() {
 						c <- os.Interrupt // Trigger graceful shutdown
 						return
 					}
-					client.SendMessage(message)
+
+					// Create the defined message request
+					msg := client.CreateReq(message, ipc.MSG_MSG)
+
+					err := client.SendIPCMessage(msg)
+					if err != nil {
+						fmt.Println(err)
+					}
 				}
 			}()
 			// Wait for exit signal

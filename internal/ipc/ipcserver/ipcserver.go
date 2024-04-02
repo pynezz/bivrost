@@ -3,7 +3,7 @@ package ipcserver
 import (
 	"bufio"
 	"bytes"
-	"encoding/binary"
+	"encoding/gob"
 	"fmt"
 	"hash/crc32"
 	"io"
@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 
+	"github.com/pynezz/bivrost/internal/ipc"
 	"github.com/pynezz/bivrost/internal/util"
 )
 
@@ -50,9 +51,10 @@ var connections Connections
 // (i) ^^ likely not needed ^^ -- <-
 
 type ipcRequest struct {
-	Header     ipcHeader  `` // The header - containing type and identifier
-	Message    ipcMessage // The message
-	Checksum32 int        // Checksum of the message byte data
+	MessageSignature []byte     // The message signature, used to declare an ipcRequest
+	Header           ipcHeader  // The header - containing type and identifier
+	Message          ipcMessage // The message
+	Checksum32       int        // Checksum of the message byte data
 }
 
 type ipcHeader struct {
@@ -66,9 +68,13 @@ type ipcMessage struct {
 }
 
 func init() {
-	// IDENTIFIERS = map[string][]byte{
-	// 	"threat_intel": THREAT_INTEL,
-	// }
+	IDENTIFIERS = map[string][]byte{
+		"threat_intel": THREAT_INTEL,
+	}
+
+	gob.Register(ipc.IPCRequest{})
+	gob.Register(ipc.IPCMessage{})
+	gob.Register(ipc.IPCHeader{})
 
 	// MSGTYPE = map[string]byte{
 	// 	"request":  0x01,
@@ -100,14 +106,16 @@ func (s *IPCServer) InitServerSocket() bool {
 
 // Creates a new listener on the socket path (which should be set in the config in the future)
 func (s *IPCServer) Listen() {
+
 	s.conn, _ = net.Listen(AF_UNIX, s.path)
-	util.PrintColorf(util.DarkBlue, "[🔌SOCKETS] Starting listener on %s", s.path)
+	util.PrintColorf(util.LightCyan, "[🔌SOCKETS] Starting listener on %s", s.path)
 
 	for {
+		util.PrintDebug("Waiting for connection...")
 		// (i) This may be where the garbage collector tries to free the memory, which is already freed manually. (ref: todo 2)
 		// (i) Meaning that we might not need to do it manually. We should anyways still delete the files though. So we need a ref to that.
 		conn, err := s.conn.Accept()
-		util.PrintColorf(util.DarkBlue, "[🔌SOCKETS]: New connection from %s", conn.LocalAddr().String())
+		util.PrintColorf(util.LightCyan, "[🔌SOCKETS]: New connection from %s", conn.LocalAddr().String())
 
 		if err != nil {
 			util.PrintError("Listen(): " + err.Error())
@@ -115,8 +123,9 @@ func (s *IPCServer) Listen() {
 		}
 
 		go handleConnection(conn)
-		util.PrintColorBold(util.DarkGreen, "🎉 IPC server started!")
+		util.PrintColorBold(util.DarkGreen, "🎉 IPC server running!")
 	}
+
 }
 
 func Cleanup() {
@@ -133,20 +142,20 @@ func Cleanup() {
 	util.PrintItalic("IPC server cleanup complete")
 }
 
-func (r *ipcRequest) Stringify() string {
-	h := fmt.Sprintf("HEADER:\n\tIdentifier: %v\nMessageType: %v\n", r.Header.Identifier, r.Header.MessageType)
-	m := fmt.Sprintf("MESSAGE:\n\tData: %v\n\tStringData: %v\n", r.Message.Data, r.Message.StringData)
-	c := fmt.Sprintf("CHECKSUM: %v\n", r.Checksum32)
-	return h + m + c
-}
+// func (r *ipc.IPCRequest) Stringify() string {
+// 	h := fmt.Sprintf("HEADER:\n\tIdentifier: %v\nMessageType: %v\n", r.Header.Identifier, r.Header.MessageType)
+// 	m := fmt.Sprintf("MESSAGE:\n\tData: %v\n\tStringData: %v\n", r.Message.Data, r.Message.StringData)
+// 	c := fmt.Sprintf("CHECKSUM: %v\n", r.Checksum32)
+// 	return h + m + c
+// }
 
-func (m *ipcMessage) Stringify() func() string {
-	f := func() string {
-		return fmt.Sprintf("Data: %v", m.Data)
-	}
+// func (m *ipc.IPCMessage) Stringify() func() string {
+// 	f := func() string {
+// 		return fmt.Sprintf("Data: %v", m.Data)
+// 	}
 
-	return f
-}
+// 	return f
+// }
 
 func crc(b []byte) int {
 	c := crc32.NewIEEE()
@@ -159,7 +168,7 @@ func crc(b []byte) int {
 }
 
 // Function to create a new IPCMessage based on the identifier key
-func NewIPCMessage(identifierKey string, messageType byte, data []byte) (*ipcRequest, error) {
+func NewIPCMessage(identifierKey string, messageType byte, data []byte) (*ipc.IPCRequest, error) {
 	identifier, ok := IDENTIFIERS[identifierKey]
 	if !ok {
 		return nil, fmt.Errorf("invalid identifier key: %s", identifierKey)
@@ -170,50 +179,117 @@ func NewIPCMessage(identifierKey string, messageType byte, data []byte) (*ipcReq
 
 	crcsum32 := crc(data)
 
-	message := &ipcMessage{
+	message := ipc.IPCMessage{
 		Data:       data,
 		StringData: string(data),
 	}
 
-	return &ipcRequest{
-		Header: ipcHeader{
+	return &ipc.IPCRequest{
+		Header: ipc.IPCHeader{
 			Identifier:  id,
 			MessageType: messageType,
 		},
-		Message:    *message,
+		Message:    message,
 		Checksum32: crcsum32,
 	}, nil
 }
 
-func parseConnection(message []byte) (ipcRequest, error) {
-	var request ipcRequest
-	var err error
+// Check the message signature (the first 6 bytes) to see if it's a valid IPC message
+func parseMessageSignature(message []byte) (ipc.IPCMessageId, error) {
 
-	if len(message) < 5 {
-		fmt.Println("parseConnection: Message too short")
-		return request, nil
+	util.PrintWarning("Possibly error and bug prone section ahead! 🐞")
+	util.PrintWarning("Will try to parse the bytes of the message to see if it's a valid IPC message... 🧐")
+
+	if len(message) < 6 {
+		return nil, fmt.Errorf("parseMessageSignature: Message too short")
 	}
 
-	headerBuf := bytes.NewReader(message[:5])
-
-	err = binary.Read(headerBuf, binary.BigEndian, &request.Header)
+	var bBuffer bytes.Buffer
+	decoder := gob.NewDecoder(&bBuffer)
+	err := decoder.Decode(&message)
 	if err != nil {
+		return nil, err
+	}
+
+	util.PrintDebug("Decoded message: \n " + bBuffer.String())
+
+	var id ipc.IPCMessageId
+	// Convert bBuffer to a byte slice before slicing it
+	copy(id[:], bBuffer.Bytes()[:len(ipc.IPCID)])
+
+	util.PrintWarning("Attempting to compare the message signature...")
+
+	if bytes.Equal(id, ipc.IPCID) {
+		util.PrintSuccess("Message signature is valid!")
+		util.PrintDebug("Message signature: " + string(id))
+		return id, nil
+	}
+
+	util.PrintError("Message signature is invalid!")
+	util.PrintError("Message signature: " + string(id))
+	return nil, fmt.Errorf("parseMessageSignature: Invalid message signature")
+}
+
+// Return the parsed IPCRequest object
+func parseConnection(c net.Conn) (ipc.IPCRequest, error) {
+	var request ipc.IPCRequest
+	// var reqBuffer bytes.Buffer
+
+	util.PrintDebug("Trying to decode the bytes to a request struct...")
+	util.PrintColorf(util.LightCyan, "Decoding the bytes to a request struct... %v", c)
+
+	decoder := gob.NewDecoder(c)
+	err := decoder.Decode(&request)
+	if err != nil {
+		util.PrintWarning("parseConnection: Error decoding the request: \n > " + err.Error())
 		return request, err
 	}
 
-	request.Message.Data = message[5:]
+	util.PrintDebug("Trying to encode the bytes to a request struct...")
+	request.Stringify()
+	util.PrintDebug("--------------------")
+
+	//
+
+	// util.PrintColorf(util.LightCyan, "[🔌SOCKETS] Got a message of %d length", len(message))
+	// msgId, err := parseMessageSignature(message)
+	if err != nil {
+		return request, err
+	}
+	util.PrintSuccess("[ipcserver.go] Parsed the message signature!")
+	fmt.Printf("Message ID: %v\n", request.MessageSignature)
+
+	// sigLen := len(ipc.IPCID)
+	// headerBuf := bytes.NewReader(message[sigLen : 5+sigLen]) // Read the header
+
+	// err = binary.Read(headerBuf, binary.BigEndian, &request.Header)
+	// if err != nil {
+	// 	return request, err
+	// }
+
+	// request.Message.Data = message[5+sigLen:] // Read the data
+	// util.PrintWarning("Attempting to parse the message data 'ipcMessage'...")
 
 	return request, nil
 }
 
+// handleConnection handles the incoming connection
 func handleConnection(c net.Conn) {
 	// defer c.Close() // May not be needed due to Close() in Cleanup()
-	util.PrintColorf(util.DarkBlue, "[🔌SOCKETS] Handling connection...")
-	reader := bufio.NewReader(c)
+	util.PrintColorf(util.LightCyan, "[🔌SOCKETS] Handling connection...")
+	reader := bufio.NewReader(c) //! Might be an issue here with the underlying reader reading more than just the struct sizes
+	//! // TODO: Test with just the c connection
+
 	for {
+		request, err := parseConnection(c)
+		if err != nil {
+			log.Printf("Parse error: %v\n", err)
+			break
+		}
+
 		// Example of reading a fixed-size header first
-		header := make([]byte, 5) // Adjust size based on your protocol
-		_, err := io.ReadFull(reader, header)
+		msgSig := make([]byte, 6)            // Adjust size based on your protocol
+		_, err = io.ReadFull(reader, msgSig) // This will fail.
 		if err != nil {
 			if err != io.EOF {
 				log.Printf("Read header error: %v\n", err)
@@ -223,12 +299,7 @@ func handleConnection(c net.Conn) {
 			break // Exit the loop on error or EOF
 		}
 
-		// Parse the header (example function, you'll need to implement this)
-		request, err := parseConnection(header)
-		if err != nil {
-			log.Printf("Parse error: %v\n", err)
-			break
-		}
+		// validateMessageSignature(msgSig) // Validate the message signature
 
 		// If your protocol specifies the data length in the header, read that many bytes next
 		// Here's a placeholder for reading the rest of the data based on your protocol
@@ -253,7 +324,7 @@ type module struct {
 }
 
 var (
-	THREAT_INTEL = []byte{0x74, 0x68, 0x72, 0x69} // "thri"
+	THREAT_INTEL = []byte{0x54, 0x48, 0x52, 0x49} // "THRI"
 )
 
 // func parseRequest(r *bufio.Reader) {

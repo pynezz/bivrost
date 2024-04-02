@@ -31,6 +31,12 @@ const (
 	Timeout = 1 * time.Second
 )
 
+var (
+	IPCID = []byte("BIVIPC") // To identify if the message is an IPC message
+)
+
+type IPCMessageId []byte // Identifier of the message
+
 var Socks map[string]*UnixSocket // NB! Probably not needed
 
 func init() {

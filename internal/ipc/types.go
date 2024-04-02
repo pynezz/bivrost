@@ -1,9 +1,12 @@
 package ipc
 
+import "fmt"
+
 type IPCRequest struct {
-	Header     IPCHeader  // The header - containing type and identifier
-	Message    IPCMessage // The message
-	Checksum32 int        // Checksum of the message byte data
+	MessageSignature []byte     // The message signature, used to declare an ipcRequest
+	Header           IPCHeader  // The header - containing type and identifier
+	Message          IPCMessage // The message
+	Checksum32       int        // Checksum of the message byte data
 }
 
 type IPCHeader struct {
@@ -48,4 +51,15 @@ var MSGTYPE = map[string]byte{
 	"disconnect": byte(MSG_DISCONNECT),
 	"error":      byte(MSG_ERROR),
 	"unknown":    byte(MSG_UNKNOWN),
+}
+
+var IDENTIFIERS = map[string][4]byte{
+	"threat_intel": [4]byte([]byte("THRI")), // Threat Intel (should equal to 0x54, 0x48, 0x52, 0x49)
+}
+
+func (r *IPCRequest) Stringify() string {
+	h := fmt.Sprintf("HEADER:\n\tIdentifier: %v\nMessageType: %v\n", r.Header.Identifier, r.Header.MessageType)
+	m := fmt.Sprintf("MESSAGE:\n\tData: %v\n\tStringData: %v\n", r.Message.Data, r.Message.StringData)
+	c := fmt.Sprintf("CHECKSUM: %v\n", r.Checksum32)
+	return h + m + c
 }
