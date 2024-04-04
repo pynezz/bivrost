@@ -158,6 +158,16 @@ func userRetry() bool {
 	return retry[0] != 'n' // If the user doesn't want to retry, return false
 }
 
+func (c *IPCClient) AwaitResponse() error {
+	if c.conn == nil {
+		util.PrintError("Connection not established")
+	}
+
+	parseConnection(c.conn)
+
+	return nil
+}
+
 // SendIPCMessage sends an IPC message to the server.
 func (c *IPCClient) SendIPCMessage(msg *ipc.IPCRequest) error {
 	var bBuffer bytes.Buffer
@@ -218,4 +228,29 @@ func getKeyFromValue(value [4]byte) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// Return the parsed IPCRequest object
+func parseConnection(c net.Conn) (ipc.IPCRequest, error) {
+	var request ipc.IPCRequest
+	// var reqBuffer bytes.Buffer
+
+	util.PrintDebug("[CLIENT] Trying to decode the bytes to a request struct...")
+	util.PrintColorf(util.LightCyan, "[CLIENT] Decoding the bytes to a request struct... %v", c)
+
+	decoder := gob.NewDecoder(c)
+	err := decoder.Decode(&request)
+	if err != nil {
+		util.PrintWarning("parseConnection: Error decoding the request: \n > " + err.Error())
+		return request, err
+	}
+
+	util.PrintDebug("Trying to encode the bytes to a request struct...")
+	fmt.Println(request.Stringify())
+	util.PrintDebug("--------------------")
+
+	util.PrintSuccess("[ipcclient.go] Parsed the message signature!")
+	fmt.Printf("Message ID: %v\n", request.MessageSignature)
+
+	return request, nil
 }

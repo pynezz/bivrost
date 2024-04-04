@@ -8,6 +8,7 @@ import (
 
 	"github.com/pynezz/bivrost/internal/ipc"
 	"github.com/pynezz/bivrost/internal/ipc/ipcclient"
+	"github.com/pynezz/bivrost/internal/util"
 )
 
 func main() {
@@ -59,6 +60,14 @@ func main() {
 					if err != nil {
 						fmt.Println(err)
 					}
+
+					// Now wait for the response
+					err = client.AwaitResponse()
+					if err != nil {
+						util.PrintError("Error receiving response from server")
+						fmt.Println(err)
+					}
+
 				}
 			}()
 			// Wait for exit signal

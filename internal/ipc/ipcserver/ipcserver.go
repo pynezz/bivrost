@@ -1,17 +1,14 @@
 package ipcserver
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/gob"
 	"fmt"
 	"hash/crc32"
-	"io"
 	"log"
 	"net"
 	"os"
-	"os/signal"
-	"syscall"
+	"strconv"
 
 	"github.com/pynezz/bivrost/internal/ipc"
 	"github.com/pynezz/bivrost/internal/util"
@@ -30,9 +27,12 @@ const (
  */
 var IDENTIFIERS map[string][]byte
 
-var MSGTYPE map[string]byte
+var (
+	THREAT_INTEL = []byte{0x54, 0x48, 0x52, 0x49} // "THRI"
+	BIVROST      = []byte{0x42, 0x49, 0x56, 0x52} // "BIVR"
+)
 
-// var IPCServerBuffer = make(map[string]*IPCServer)
+var MSGTYPE map[string]byte
 
 /* TYPES
  * Types for the IPC communication between the connector and the other modules.
@@ -55,6 +55,7 @@ var connections Connections
 func init() {
 	IDENTIFIERS = map[string][]byte{
 		"threat_intel": THREAT_INTEL,
+		"bivrost":      BIVROST,
 	}
 
 	gob.Register(ipc.IPCRequest{})
@@ -76,9 +77,6 @@ func (s *IPCServer) InitServerSocket() bool {
 		util.PrintError("InitServerSocket(): Failed to remove old socket: " + err.Error())
 		return false
 	}
-
-	// IPCServerBuffer[s.path] = s //! // TODO: segmentation violation on cleanup
-	// connections.sockets[s.path] = s // (i) <- likely not needed
 
 	return true
 }
@@ -118,23 +116,8 @@ func Cleanup() {
 	// 	util.PrintItalic("Closing connection: " + server.conn.Addr().String())
 	// 	server.conn.Close()
 	// }
-	util.PrintItalic("IPC server cleanup complete")
+	util.PrintItalic("\t... IPC server cleanup complete.")
 }
-
-// func (r *ipc.IPCRequest) Stringify() string {
-// 	h := fmt.Sprintf("HEADER:\n\tIdentifier: %v\nMessageType: %v\n", r.Header.Identifier, r.Header.MessageType)
-// 	m := fmt.Sprintf("MESSAGE:\n\tData: %v\n\tStringData: %v\n", r.Message.Data, r.Message.StringData)
-// 	c := fmt.Sprintf("CHECKSUM: %v\n", r.Checksum32)
-// 	return h + m + c
-// }
-
-// func (m *ipc.IPCMessage) Stringify() func() string {
-// 	f := func() string {
-// 		return fmt.Sprintf("Data: %v", m.Data)
-// 	}
-
-// 	return f
-// }
 
 func crc(b []byte) int {
 	c := crc32.NewIEEE()
@@ -175,7 +158,6 @@ func NewIPCMessage(identifierKey string, messageType byte, data []byte) (*ipc.IP
 
 // Check the message signature (the first 6 bytes) to see if it's a valid IPC message
 func parseMessageSignature(message []byte) (ipc.IPCMessageId, error) {
-
 	util.PrintWarning("Possibly error and bug prone section ahead! 🐞")
 	util.PrintWarning("Will try to parse the bytes of the message to see if it's a valid IPC message... 🧐")
 
@@ -224,30 +206,13 @@ func parseConnection(c net.Conn) (ipc.IPCRequest, error) {
 		return request, err
 	}
 
-	util.PrintDebug("Trying to encode the bytes to a request struct...")
-	request.Stringify()
+	fmt.Println(request.Stringify())
 	util.PrintDebug("--------------------")
-
-	//
-
-	// util.PrintColorf(util.LightCyan, "[🔌SOCKETS] Got a message of %d length", len(message))
-	// msgId, err := parseMessageSignature(message)
-	if err != nil {
-		return request, err
-	}
 	util.PrintSuccess("[ipcserver.go] Parsed the message signature!")
-	fmt.Printf("Message ID: %v\n", request.MessageSignature)
+	fmt.Printf("Message ID: %s\n", string(request.MessageSignature))
 
-	// sigLen := len(ipc.IPCID)
-	// headerBuf := bytes.NewReader(message[sigLen : 5+sigLen]) // Read the header
-
-	// err = binary.Read(headerBuf, binary.BigEndian, &request.Header)
-	// if err != nil {
-	// 	return request, err
-	// }
-
-	// request.Message.Data = message[5+sigLen:] // Read the data
-	// util.PrintWarning("Attempting to parse the message data 'ipcMessage'...")
+	// Check the message signature
+	// TODO: Verify the message signature
 
 	return request, nil
 }
@@ -256,104 +221,51 @@ func parseConnection(c net.Conn) (ipc.IPCRequest, error) {
 func handleConnection(c net.Conn) {
 	// defer c.Close() // May not be needed due to Close() in Cleanup()
 	util.PrintColorf(util.LightCyan, "[🔌SOCKETS] Handling connection...")
-	reader := bufio.NewReader(c) //! Might be an issue here with the underlying reader reading more than just the struct sizes
-	//! // TODO: Test with just the c connection
-	x := make(chan os.Signal, 1)
-	signal.Notify(x, os.Interrupt, syscall.SIGTERM)
 
-	for {
-		request, err := parseConnection(c)
-		if err != nil {
-			log.Printf("Parse error: %v\n", err)
-			break
-		}
-
-		// Example of reading a fixed-size header first
-		msgSig := make([]byte, 6)            // Adjust size based on your protocol
-		_, err = io.ReadFull(reader, msgSig) // This will fail.
-		if err != nil {
-			if err != io.EOF {
-				log.Printf("Read header error: %v\n", err)
-			} else {
-				log.Println("Client disconnected")
-			}
-			break // Exit the loop on error or EOF
-		}
-
-		// validateMessageSignature(msgSig) // Validate the message signature
-
-		// If your protocol specifies the data length in the header, read that many bytes next
-		// Here's a placeholder for reading the rest of the data based on your protocol
-		data := make([]byte, len(request.Message.Data)) // Define dataLength based on your header
-		_, err = io.ReadFull(reader, data)
-		if err != nil {
-			log.Printf("Read data error: %v\n", err)
-			break
-		}
-
-		// Process the request...
-		log.Printf("Received: %+v\n", request)
-
-		// Example response
-		c.Write([]byte("ACK\n"))
+	request, err := parseConnection(c)
+	if err != nil {
+		log.Printf("Parse error: %v\n", err)
 	}
-	<-x
+
+	util.PrintDebug("Request parsed: " + strconv.Itoa(request.Checksum32))
+
+	// Process the request...
+	util.PrintColorf(util.BgGreen, "Received: %+v\n", request)
+
+	// Finally, respond to the client
+	err = respond(c)
+	if err != nil {
+		util.PrintError("handleConnection: " + err.Error())
+	}
 }
 
-type module struct {
-	name string
-	desc string
+func respond(c net.Conn) error {
+	util.PrintDebug("Responding to the client...")
+	var responseBuffer bytes.Buffer
+	response, err := NewIPCMessage("bivrost", ipc.MSG_ACK, []byte("Message received"))
+	if err != nil {
+		return err
+	}
+
+	encoder := gob.NewEncoder(&responseBuffer)
+	err = encoder.Encode(response)
+	if err != nil {
+		return err
+	}
+
+	_, err = c.Write(responseBuffer.Bytes())
+	if err != nil {
+		return err
+	}
+
+	util.PrintColor(util.BgGreen, "Response sent!")
+
+	return nil
+
 }
-
-var (
-	THREAT_INTEL = []byte{0x54, 0x48, 0x52, 0x49} // "THRI"
-)
-
-// func parseRequest(r *bufio.Reader) {
-// 	var request ipcRequest
-// 	var response ipcResponse
-// 	var err error
-
-// 	// Read the header
-// 	request, err = r.ReadBytes('\n')
-
-// 	if err != nil {
-// 		response.Error = err
-// 		writeResponse(c, response)
-// 		return
-// 	}
-
-// 	// Read the data
-// 	request.Data, err = readData(r)
-// 	if err != nil {
-// 		response.Error = err
-// 		writeResponse(c, response)
-// 		return
-// 	}
-
-// 	response.Header = request.Header
-// 	response.Data = request.Data
-// 	response.Error = nil
-
-// 	writeResponse(c, response)
-
-// }
 
 // TODO's: 1]
 // - check the config for activated modules
 // - check if the module is already activated
 // - check if connection with the module already exists
 // - create socket names based on the module name
-
-// TODO: 2] Fix segmentation violation on cleanup
-/*
-Done cleaning up. Exiting...
-panic: runtime error: invalid memory address or nil pointer dereference
-[signal SIGSEGV: segmentation violation code=0x1 addr=0x20 pc=0x783c8c]
-
-goroutine 22 [running]:
-github.com/pynezz/bivrost/internal/ipc/ipcserver.(*IPCServer).Listen(0xc0000b60a0)
-        .../bivrost/internal/ipc/ipcserver/ipcserver.go:87 +0xcc
-created by main.testUDS in goroutine 3
-        .../bivrost/main.go:168 +0x216
-*/

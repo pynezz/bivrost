@@ -26,9 +26,12 @@ import (
 // 2. It initializes the tui.Header.Color and prints the header.
 // 3. It checks if the number of arguments is less than 2 and prints a warning if it is.
 // 4. It parses the flags.
-// 5. If the test flag is set, it checks if the value is "db" and calls the testDbConnection function.
-// 6. It loads the configuration file and prints it.
-// 7. It creates a new server and listens on port 3000.
+// 5. Testing
+// 5.1 If the test flag is set to "db", it tests the database connection.
+// 5.2 It tests the UDS connection.
+// 6. It loads the configuration file and connects to the database.
+// 7. It initializes the Fiber server with the configuration values.
+// 8. It sets the port to 3000 if the configuration file does not specify a port.
 
 func main() {
 
@@ -77,26 +80,12 @@ func main() {
 		return
 	}
 
-	// var argon2Obj = cryptoutils.Argon2{} // Change the type to cryptoutils.Argon2
-	// cryptoutils.InitArgon2(&argon2Obj) // Pass the address of argon2Obj
-
 	// Connect to database
 	db, err := middleware.NewDBService().Connect(cfg.Database.Path)
 	if err != nil {
 		util.PrintError("Main function: " + err.Error())
 		return
 	}
-	// database := &middleware.Database{
-	// 	Driver: db,
-	// }
-
-	// middleware.TestWrite(middleware.GetDBInstance())
-
-	// db, err := middleware.InitDatabaseDriver().Connect(cfg.Database.Path)
-	// if err != nil {
-	// 	util.PrintError("Main function: " + err.Error())
-	// 	return
-	// }
 
 	// As stated in the documentation:
 	// 	- It is rare to Close a DB, as the DB handle is meant to be long-lived and shared between many goroutines.
@@ -108,13 +97,13 @@ func main() {
 	if cfg.Network.Port != 0 {
 		port = cfg.Network.Port
 	}
+
 	// Create the web server
 	app := api.NewServer(cfg)
 	app.Listen(":" + strconv.Itoa(port))
 
 	util.PrintItalic("[main.go] Waiting for SIGINT or SIGTERM... Press Ctrl+C to exit.")
 	util.PrintItalic("[main.go] Exiting...")
-
 }
 
 const dbPath = "users.db" // Testing purposes. This should be in the config file
