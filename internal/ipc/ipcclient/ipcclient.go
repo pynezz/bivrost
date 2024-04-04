@@ -16,12 +16,21 @@ import (
 	"github.com/pynezz/bivrost/internal/util"
 )
 
-func countDown(secLeft int) {
-	for i := secLeft; i > 0; i-- {
-		i--
-		time.Sleep(time.Second)
-		util.PrintInfo(util.Overwrite + strconv.Itoa(i) + " seconds left" + util.Backspace)
-		countDown(i)
+type IPCClient struct {
+	Name string // Name of the module
+	Desc string // Description of the module
+
+	Identifier [4]byte // Identifier of the module
+
+	Sock string   // Path to the UNIX domain socket
+	conn net.Conn // Connection to the IPC server (UNIX domain socket)
+}
+
+func countDown(secLeft int) { // i--
+	util.PrintInfo(util.Overwrite + strconv.Itoa(secLeft) + " seconds left" + util.Backspace)
+	time.Sleep(time.Second)
+	if secLeft > 0 {
+		countDown(secLeft - 1)
 	}
 }
 
@@ -51,16 +60,6 @@ func (c *IPCClient) SetDescf(desc string, args ...interface{}) {
 	c.Desc = fmt.Sprintf(desc, args...)
 }
 
-// Get a key from a value in a map such as IDENTIFIERS
-func getKeyFromValue(value [4]byte) (string, bool) {
-	for key, val := range ipc.IDENTIFIERS {
-		if val == value {
-			return key, true
-		}
-	}
-	return "", false
-}
-
 func (c *IPCClient) Stringify() string {
 	if c.Name == "" {
 		util.PrintWarning("No name set for IPCClient")
@@ -84,60 +83,72 @@ func (c *IPCClient) Stringify() string {
 	return util.FormatRoundedBox(stringified)
 }
 
-// We'll get the path from the config, but for now let's just hard code it
-func (c *IPCClient) Connect(module string) error {
-	tmpDir := os.TempDir()
-	bivrostTmpDir := path.Join(tmpDir, "bivrost")          // temp directory
-	socketPath := path.Join(bivrostTmpDir, module+".sock") // full path + filename
-	c.Name = module
-	c.SetDescf("IPC testing client for %s", module)
-
-	// Check if the socket exists
-	exist := socketExists(socketPath)
+// returns a bool (retry) and an error
+func existHandler(exist bool) (bool, error) {
 	if !exist {
-		fmt.Println("Socket not found.")
+		util.PrintError("socket (" + DefaultSocketPath() + ") not found")
 		util.PrintColorUnderline(util.DarkYellow, "Retry? [Y/n]")
 		var response string
 		fmt.Scanln(&response)
 		if response[0] == 'n' {
-			return fmt.Errorf("socket not found")
+			return false, fmt.Errorf("socket not found")
 		}
-		c.Connect(module)
+		return true, nil
+	}
+	return false, nil
+}
+
+func (c *IPCClient) SetSocket(socketPath string) error {
+	if socketPath == "" {
+		socketPath = DefaultSocketPath()
+	}
+	c.Sock = socketPath
+
+	retry, err := existHandler(socketExists(socketPath))
+	if err != nil {
+		return err
+	}
+	if retry {
+		c.SetSocket(socketPath)
+	}
+	return err
+}
+
+// Get the default socket path (UNIX domain socket path, /tmp/bivrost/bivrost.sock)
+func DefaultSocketPath() string {
+	tmpDir := os.TempDir() // Get the temporary directory, OS agnostic
+	bivrostTmpDir := path.Join(tmpDir, "bivrost")
+	return path.Join(bivrostTmpDir, "bivrost.sock")
+}
+
+// We'll get the path from the config, but for now let's just hard code it
+func (c *IPCClient) Connect(module string) error {
+	c.SetDescf("IPC testing client for %s", module)
+	c.Name = module
+
+	// Check if the socket exists
+	err := c.SetSocket(DefaultSocketPath())
+	if err != nil { // The socket did not exist and the user did not want to retry
+		return err // Return the error
 	}
 
-	conn, err := net.Dial("unix", socketPath)
+	conn, err := net.Dial("unix", c.Sock)
 	if err != nil {
 		fmt.Println("Dial error:", err)
 		return err
 	}
 	c.conn = conn
-	c.Identifier = ipc.IDENTIFIERS["threat_intel"] // Should equal to  0x54, 0x48, 0x52, 0x49
+	c.Identifier = ipc.IDENTIFIERS["threat_intel"] // Should equal to 0x54, 0x48, 0x52, 0x49,
 
-	util.PrintColorAndBg(util.BgGray, util.BgCyan, "Connected to "+socketPath)
+	util.PrintColorAndBg(util.BgGray, util.BgCyan, "Connected to "+c.Sock)
 
 	// Print box with client info
 	util.PrintColor(util.Cyan, c.Stringify())
 
-	// Add the connection to the client buffer // NB! We may not need this
-	// clientsBuffer[module] = c
 	return nil
 }
 
-func (c *IPCClient) NewIPCMessage(message string, t ipc.MsgType) (*ipc.IPCRequest, error) {
-	checksum := crc32.ChecksumIEEE([]byte(message))
-	return &ipc.IPCRequest{
-		Header: ipc.IPCHeader{
-			Identifier:  c.Identifier,
-			MessageType: byte(t),
-		},
-		Message: ipc.IPCMessage{
-			Data:       []byte(message),
-			StringData: message,
-		},
-		Checksum32: int(checksum),
-	}, nil
-}
-
+// userRetry asks the user if they want to retry connecting to the IPC server.
 func userRetry() bool {
 	fmt.Println("IPCClient not connected\nDid you forget to call Connect()?")
 	util.PrintWarning("Do you want to retry? [Y/n]")
@@ -147,25 +158,7 @@ func userRetry() bool {
 	return retry[0] != 'n' // If the user doesn't want to retry, return false
 }
 
-// sendMessage sends a string message to the connection
-func (c *IPCClient) SendMessage(message string) error {
-	if c.conn == nil {
-		if !userRetry() {
-			return fmt.Errorf("connection not established")
-		} else {
-			c.Connect(message)
-		}
-	}
-	_, err := c.conn.Write([]byte(message))
-	if err != nil {
-		fmt.Println("Write error:", err)
-		return err
-	}
-	fmt.Println("Message sent:", message)
-
-	return nil
-}
-
+// SendIPCMessage sends an IPC message to the server.
 func (c *IPCClient) SendIPCMessage(msg *ipc.IPCRequest) error {
 	var bBuffer bytes.Buffer
 	encoder := gob.NewEncoder(&bBuffer)
@@ -193,13 +186,7 @@ func (c *IPCClient) SendIPCMessage(msg *ipc.IPCRequest) error {
 	return nil
 }
 
-/*
-NewMessage creates a new IPC message
-
-message string: The message to send
-
-t: The message type
-*/
+// NewMessage creates a new IPC message.
 func (c *IPCClient) CreateReq(message string, t ipc.MsgType) *ipc.IPCRequest {
 	checksum := crc32.ChecksumIEEE([]byte(message))
 	util.PrintDebug("Created IPC checksum: " + strconv.Itoa(int(checksum)))
@@ -221,4 +208,14 @@ func (c *IPCClient) CreateReq(message string, t ipc.MsgType) *ipc.IPCRequest {
 // Close the connection
 func (c *IPCClient) Close() {
 	c.conn.Close()
+}
+
+// Get a key from a value in a map such as IDENTIFIERS
+func getKeyFromValue(value [4]byte) (string, bool) {
+	for key, val := range ipc.IDENTIFIERS {
+		if val == value {
+			return key, true
+		}
+	}
+	return "", false
 }

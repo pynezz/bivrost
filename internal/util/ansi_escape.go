@@ -98,7 +98,6 @@ const (
 )
 
 func SPrintRoundedTop(width int) string {
-	PrintDebug("UTIL: SPrintRoundedTop width: " + fmt.Sprintf("%d", width))
 	rtop := ""
 	for i := 0; i < width-2; i++ {
 		rtop += RoundedHoriz
@@ -130,37 +129,70 @@ func PrintRoundedBottom(width int) {
 	fmt.Print(RoundedBottomRight)
 }
 
+func AddPadding(content string, width int) string {
+	padding := width - len(content)
+	for i := 0; i < padding+1; i++ {
+		content += " "
+	}
+	return content
+}
+
+// Get the width of a multiline string
+func GetWidth(content string) int {
+	width := 0
+	tmpW := 0
+	for _, c := range content {
+		if c == '\n' {
+			if width < tmpW {
+				width = tmpW
+			}
+			tmpW = 0
+		} else {
+			tmpW++
+		}
+	}
+	if width == 0 {
+		width = tmpW
+	}
+	return width
+}
+
 // FormatRoundedBox formats a string into a rounded box
 // ! Do not spend a lot of time on this, it is not important
 func FormatRoundedBox(content string) string {
 	tmpW := 0 // Temporary width
 	w := 0    // Actual final width
-	// lines := 0 // Number of lines
 	result := ""
+
+	lines := []string{}
 
 	for i, c := range content {
 		if c == '\n' {
-			if w > tmpW {
+			if w < tmpW {
 				w = tmpW
 			}
-			result += fmt.Sprintf("%s %s %s\n", RoundedVert, content[i-tmpW:i], RoundedVert) // Should be │ content │
-			// It might not be '\n', but \x00 or something else
-			//! // TODO: Check formatting here
+			// result += fmt.Sprintf("%s %s %s\n", RoundedVert, content[i-tmpW:i], RoundedVert) // Should be │ content │
+			lines = append(lines, fmt.Sprintf("%s %s ", RoundedVert, content[i-tmpW:i])) // Add to the line slice
 
 			tmpW = 0
-			// lines++
 		} else {
 			tmpW++
 		}
 	}
+
 	if w == 0 {
 		w = tmpW // If there are no newlines
 	}
 
-	tmpRes := result // Not sure if needed, but made most sense to me
+	finres := ""
 
-	// Add borders top and bottom now that the width is known
-	result += SPrintRoundedTop(w) + tmpRes + SPrintRoundedBottom(w)
+	w += 4 // Add 4 for the corners + padding
+
+	for _, l := range lines {
+		finres += AddPadding(l, w) + RoundedVert + "\n"
+	}
+
+	result = SPrintRoundedTop(w) + "\n" + finres + SPrintRoundedBottom(w)
 
 	return result
 }

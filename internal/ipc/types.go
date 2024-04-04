@@ -1,6 +1,8 @@
 package ipc
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type IPCRequest struct {
 	MessageSignature []byte     // The message signature, used to declare an ipcRequest

@@ -1,33 +1,25 @@
 package main
 
 import (
-	"context"
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
-	"github.com/pynezz/bivrost/internal/connector/proto"
 	"github.com/pynezz/bivrost/internal/ipc"
 	"github.com/pynezz/bivrost/internal/ipc/ipcclient"
-
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 func main() {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	// var sock *net.UnixConn
 
 	fmt.Println("Testing module connection...")
 	for i, arg := range os.Args {
 		switch arg {
 		case "proto":
 			fmt.Println("Testing gRPC connection...")
-			testProtoConnection()
+			fmt.Println("gRPC deprecated. Exiting...")
 		case "uds":
 			fmt.Println("Testing UNIX domain socket connection...")
 			// testUnixSocketIPC()
@@ -35,7 +27,7 @@ func main() {
 			err := client.Connect("bivrost") // Connect to the UNIX domain socket
 			if err != nil {
 				fmt.Println(err)
-				fmt.Println("Whoops..")
+				return
 			}
 			fmt.Println("Connected")
 
@@ -43,13 +35,18 @@ func main() {
 			go func() {
 
 				// Create new module
-
 				for {
+					// BUG: If the user enters spaces in the message, the message will be split into multiple messages
 					var message string
 					fmt.Println("Enter a message to send to the server (or type 'exit' to quit):")
 					fmt.Scanln(&message)
 
 					if message == "exit" {
+						err := client.SendIPCMessage(client.CreateReq("exit", ipc.MSG_DISCONNECT))
+						if err != nil {
+							fmt.Println(err)
+						}
+
 						client.Close()
 						signal.Stop(c)
 						c <- os.Interrupt // Trigger graceful shutdown
@@ -58,7 +55,6 @@ func main() {
 
 					// Create the defined message request
 					msg := client.CreateReq(message, ipc.MSG_MSG)
-
 					err := client.SendIPCMessage(msg)
 					if err != nil {
 						fmt.Println(err)
@@ -71,7 +67,6 @@ func main() {
 			return
 
 		default:
-			fmt.Println("Parsing args...")
 			fmt.Printf("Arg %d: %s\n", i, arg)
 		}
 	}
@@ -80,42 +75,42 @@ func main() {
 	fmt.Println("Exiting...")
 }
 
-func testProtoConnection() {
-	target := "localhost:50051"
-	fmt.Printf("Testing gRPC connection to %s...\n", target)
+// func testProtoConnection() {
+// 	target := "localhost:50051"
+// 	fmt.Printf("Testing gRPC connection to %s...\n", target)
 
-	conn, err := grpc.Dial(
-		target, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock(),
-	)
-	if err != nil {
-		log.Fatalf("did not connect: %v", err)
-	}
-	defer conn.Close()
+// 	conn, err := grpc.Dial(
+// 		target, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock(),
+// 	)
+// 	if err != nil {
+// 		log.Fatalf("did not connect: %v", err)
+// 	}
+// 	defer conn.Close()
 
-	c := proto.NewConnectorClient(conn)
+// 	c := proto.NewConnectorClient(conn)
 
-	secs := 0
+// 	secs := 0
 
-	// Example: Send data every 5 seconds
-	ticker := time.NewTicker(5 * time.Second)
-	for range ticker.C {
-		fmt.Printf("[%d] Trying to connect...\n", secs)
-		secs += 5
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer cancel()
+// 	// Example: Send data every 5 seconds
+// 	ticker := time.NewTicker(5 * time.Second)
+// 	for range ticker.C {
+// 		fmt.Printf("[%d] Trying to connect...\n", secs)
+// 		secs += 5
+// 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+// 		defer cancel()
 
-		response, err := c.Connect(ctx, &proto.ConnectRequest{
-			Module:  "TestModule",
-			Method:  "TestMethod",
-			Payload: "RandomData",
-		})
-		if err != nil {
-			log.Fatalf("could not connect: %v", err)
-		}
-		log.Printf("Response: %s", response.GetPayload())
-	}
-	// <-ticker.C
-}
+// 		response, err := c.Connect(ctx, &proto.ConnectRequest{
+// 			Module:  "TestModule",
+// 			Method:  "TestMethod",
+// 			Payload: "RandomData",
+// 		})
+// 		if err != nil {
+// 			log.Fatalf("could not connect: %v", err)
+// 		}
+// 		log.Printf("Response: %s", response.GetPayload())
+// 	}
+// 	// <-ticker.C
+// }
 
 // Connect to a UNIX domain socket
 // TODO: Fix
