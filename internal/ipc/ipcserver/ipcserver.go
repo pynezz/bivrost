@@ -3,6 +3,7 @@ package ipcserver
 import (
 	"bytes"
 	"encoding/gob"
+	"encoding/json"
 	"fmt"
 	"hash/crc32"
 	"log"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/pynezz/bivrost/internal/ipc"
 	"github.com/pynezz/bivrost/internal/util"
+	"gopkg.in/yaml.v3"
 )
 
 /* CONSTANTS
@@ -206,6 +208,8 @@ func parseConnection(c net.Conn) (ipc.IPCRequest, error) {
 		return request, err
 	}
 
+	// Parse the encoded message
+
 	fmt.Println(request.Stringify())
 	util.PrintDebug("--------------------")
 	util.PrintSuccess("[ipcserver.go] Parsed the message signature!")
@@ -215,6 +219,42 @@ func parseConnection(c net.Conn) (ipc.IPCRequest, error) {
 	// TODO: Verify the message signature
 
 	return request, nil
+}
+
+func parseData(msg ipc.IPCMessage) ipc.GenericData {
+	var data ipc.GenericData
+	var dataType ipc.DataType
+
+	switch dataType {
+	case ipc.DATA_TEXT:
+		// Parse the integer data
+		fmt.Println("Data is string")
+	case ipc.DATA_INT:
+		// Parse the JSON data
+		fmt.Println("Data is integer")
+		// data = ipc.JSONData(msg.Data)
+	case ipc.DATA_JSON:
+		// Parse the string data
+		fmt.Println("Data is json / generic data")
+		json.Unmarshal(msg.Data, &data)
+	case ipc.DATA_YAML:
+		// Parse the YAML data
+		fmt.Println("Data is YAML / generic data")
+		yaml.Unmarshal(msg.Data, &data)
+	case ipc.DATA_BIN:
+		// Parse the binary data
+		fmt.Println("Data is binary / generic data")
+	default:
+		// Default to generic data
+		fmt.Println("Data is generic")
+		gob.NewDecoder(bytes.NewReader(msg.Data)).Decode(&data)
+	}
+
+	if data == nil {
+		fmt.Println("Data is nil")
+	}
+
+	return data
 }
 
 // handleConnection handles the incoming connection

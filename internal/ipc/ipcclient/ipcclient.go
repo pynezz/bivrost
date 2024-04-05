@@ -197,7 +197,7 @@ func (c *IPCClient) SendIPCMessage(msg *ipc.IPCRequest) error {
 }
 
 // NewMessage creates a new IPC message.
-func (c *IPCClient) CreateReq(message string, t ipc.MsgType) *ipc.IPCRequest {
+func (c *IPCClient) CreateReq(message string, t ipc.MsgType, dataType ipc.DataType) *ipc.IPCRequest {
 	checksum := crc32.ChecksumIEEE([]byte(message))
 	util.PrintDebug("Created IPC checksum: " + strconv.Itoa(int(checksum)))
 
@@ -208,8 +208,42 @@ func (c *IPCClient) CreateReq(message string, t ipc.MsgType) *ipc.IPCRequest {
 			MessageType: byte(t),
 		},
 		Message: ipc.IPCMessage{
+			Datatype:   dataType,
 			Data:       []byte(message),
 			StringData: message,
+		},
+		Checksum32: int(checksum),
+	}
+}
+
+func (c *IPCClient) CreateGenericReq(message interface{}, t ipc.MsgType, dataType ipc.DataType) *ipc.IPCRequest {
+	var data []byte
+	switch dataType {
+	case ipc.DATA_TEXT:
+		data = []byte(message.(string))
+	case ipc.DATA_INT:
+		data = []byte(strconv.Itoa(message.(int)))
+	case ipc.DATA_JSON:
+		data = []byte(fmt.Sprintf("%v", message))
+	case ipc.DATA_YAML:
+		data = []byte(fmt.Sprintf("%v", message))
+	case ipc.DATA_BIN:
+		data = message.([]byte)
+	}
+
+	checksum := crc32.ChecksumIEEE(data)
+	util.PrintDebug("Created IPC checksum: " + strconv.Itoa(int(checksum)))
+
+	return &ipc.IPCRequest{
+		MessageSignature: ipc.IPCID,
+		Header: ipc.IPCHeader{
+			Identifier:  c.Identifier,
+			MessageType: byte(t),
+		},
+		Message: ipc.IPCMessage{
+			Datatype:   ipc.DATA_JSON,
+			Data:       data,
+			StringData: fmt.Sprintf("%v", message),
 		},
 		Checksum32: int(checksum),
 	}

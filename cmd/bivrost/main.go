@@ -164,6 +164,7 @@ func testUDS() {
 		return
 	}
 
+	// TODO: Check if this is more applicable: https://www.man7.org/linux/man-pages/man7/unix.7.html
 	go ipcServer.Listen()
 
 	util.PrintItalic("Waiting for SIGINT or SIGTERM... Press Ctrl+C to exit.")

@@ -17,11 +17,21 @@ type IPCHeader struct {
 }
 
 type IPCMessage struct {
-	Data       []byte // Data of the message
-	StringData string // String representation of the data if applicable
+	Datatype   DataType // Type of the data ("json", "string", "int", etc.)
+	Data       []byte   // The actual data
+	StringData string   // String representation of the data if applicable
 }
 
+// GenericData is a generic map for data. It can be used to store any data type.
+//
+// Ex:
+//
+//	var data GenericData = map[string]interface{}{"someKey": "someValue"}
+//	fmt.Println("Received data:", data["someKey"]) // Will print someValue
+type GenericData map[string]interface{}
+
 type MsgType int
+type DataType int
 
 const (
 	MSG_CONN    = 0x01 // Connection message
@@ -40,6 +50,14 @@ const (
 	MSG_ERROR = 0xEE
 
 	MSG_UNKNOWN = 0xFF // Unknown message - for signifying unknown type, maybe an error, but the receiver will try to wing it
+)
+
+const (
+	DATA_TEXT = 0x01 // Text data
+	DATA_INT  = 0x02 // Integer data
+	DATA_JSON = 0x03 // JSON data	(used for structured data)
+	DATA_YAML = 0x04 // YAML data	(used for configuration files)
+	DATA_BIN  = 0x05 // Binary data	(such as images, files, etc.)
 )
 
 var MSGTYPE = map[string]byte{

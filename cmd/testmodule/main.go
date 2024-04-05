@@ -43,7 +43,7 @@ func main() {
 					fmt.Scanln(&message)
 
 					if message == "exit" {
-						err := client.SendIPCMessage(client.CreateReq("exit", ipc.MSG_DISCONNECT))
+						err := client.SendIPCMessage(client.CreateReq("exit", ipc.MSG_DISCONNECT, ipc.DATA_INT))
 						if err != nil {
 							fmt.Println(err)
 						}
@@ -55,7 +55,7 @@ func main() {
 					}
 
 					// Create the defined message request
-					msg := client.CreateReq(message, ipc.MSG_MSG)
+					msg := client.CreateReq(message, ipc.MSG_MSG, ipc.DATA_TEXT)
 					err := client.SendIPCMessage(msg)
 					if err != nil {
 						fmt.Println(err)
@@ -82,6 +82,14 @@ func main() {
 	fmt.Println("End of program. Waiting for SIGINT or SIGTERM...")
 	<-c
 	fmt.Println("Exiting...")
+}
+
+func sendGenericMessage(client *ipcclient.IPCClient, message interface{}) {
+	msg := client.CreateGenericReq(message, ipc.MSG_MSG, ipc.DATA_JSON)
+	err := client.SendIPCMessage(msg)
+	if err != nil {
+		fmt.Println(err)
+	}
 }
 
 // func testProtoConnection() {
