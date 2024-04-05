@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/crc32"
-	"log"
+	"io"
 	"net"
 	"os"
 	"strconv"
@@ -64,6 +64,7 @@ func init() {
 	gob.Register(ipc.IPCMessage{})
 	gob.Register(ipc.IPCHeader{})
 	gob.Register(ipc.IPCMessageId{})
+	gob.Register(&ipc.IPCResponse{})
 }
 
 func NewIPCServer(path string) *IPCServer {
@@ -85,14 +86,12 @@ func (s *IPCServer) InitServerSocket() bool {
 
 // Creates a new listener on the socket path (which should be set in the config in the future)
 func (s *IPCServer) Listen() {
-
+	util.PrintColorBold(util.DarkGreen, "🎉 IPC server running!")
 	s.conn, _ = net.Listen(AF_UNIX, s.path)
 	util.PrintColorf(util.LightCyan, "[🔌SOCKETS] Starting listener on %s", s.path)
 
 	for {
 		util.PrintDebug("Waiting for connection...")
-		// (i) This may be where the garbage collector tries to free the memory, which is already freed manually. (ref: todo 2)
-		// (i) Meaning that we might not need to do it manually. We should anyways still delete the files though. So we need a ref to that.
 		conn, err := s.conn.Accept()
 		util.PrintColorf(util.LightCyan, "[🔌SOCKETS]: New connection from %s", conn.LocalAddr().String())
 
@@ -101,10 +100,8 @@ func (s *IPCServer) Listen() {
 			continue
 		}
 
-		go handleConnection(conn)
-		util.PrintColorBold(util.DarkGreen, "🎉 IPC server running!")
+		handleConnection(conn)
 	}
-
 }
 
 func Cleanup() {
@@ -121,14 +118,14 @@ func Cleanup() {
 	util.PrintItalic("\t... IPC server cleanup complete.")
 }
 
-func crc(b []byte) int {
-	c := crc32.NewIEEE()
-	s, err := c.Write(b)
-	if err != nil {
-		util.PrintError("crc(): " + err.Error())
-		return 0xFF // Error
-	}
-	return s
+func crc(b []byte) uint32 {
+	return crc32.ChecksumIEEE(b)
+	// s, err := c.Write(b)
+	// if err != nil {
+	// 	util.PrintError("crc(): " + err.Error())
+	// 	return 0xFF // Error
+	// }
+	// return s
 }
 
 // Function to create a new IPCMessage based on the identifier key
@@ -154,8 +151,18 @@ func NewIPCMessage(identifierKey string, messageType byte, data []byte) (*ipc.IP
 			MessageType: messageType,
 		},
 		Message:    message,
-		Checksum32: crcsum32,
+		Timestamp:  util.UnixNanoTimestamp(),
+		Checksum32: int(crcsum32),
 	}, nil
+}
+
+func newIPCResponse(req ipc.IPCRequest, success bool, message string) *ipc.IPCResponse {
+	return &ipc.IPCResponse{
+		Request:    req,
+		Success:    success,
+		Message:    message,
+		Checksum32: int(req.Checksum32),
+	}
 }
 
 // Check the message signature (the first 6 bytes) to see if it's a valid IPC message
@@ -207,6 +214,9 @@ func parseConnection(c net.Conn) (ipc.IPCRequest, error) {
 		util.PrintWarning("parseConnection: Error decoding the request: \n > " + err.Error())
 		return request, err
 	}
+	d := parseData(&request.Message)
+	fmt.Println("Vendor: ", d["vendor"])
+	// fmt.Println("Vendor: " + string(request.Message.Data["vendor"] ))
 
 	// Parse the encoded message
 
@@ -221,11 +231,11 @@ func parseConnection(c net.Conn) (ipc.IPCRequest, error) {
 	return request, nil
 }
 
-func parseData(msg ipc.IPCMessage) ipc.GenericData {
+func parseData(msg *ipc.IPCMessage) ipc.GenericData {
 	var data ipc.GenericData
-	var dataType ipc.DataType
+	// var dataType ipc.DataType
 
-	switch dataType {
+	switch msg.Datatype {
 	case ipc.DATA_TEXT:
 		// Parse the integer data
 		fmt.Println("Data is string")
@@ -236,11 +246,25 @@ func parseData(msg ipc.IPCMessage) ipc.GenericData {
 	case ipc.DATA_JSON:
 		// Parse the string data
 		fmt.Println("Data is json / generic data")
-		json.Unmarshal(msg.Data, &data)
+		// json.Unmarshal(msg.Data, &data)
+
+		// var temp interface{}
+		err := json.Unmarshal(msg.Data, &data)
+		if err != nil {
+			fmt.Println("Error unmarshaling JSON data:", err)
+		} else {
+			// fmt.Println("Temporary data:", temp)
+			// data = temp.(map[string]interface{})
+			fmt.Printf("Data: %v\n", data)
+		}
+
 	case ipc.DATA_YAML:
 		// Parse the YAML data
 		fmt.Println("Data is YAML / generic data")
-		yaml.Unmarshal(msg.Data, &data)
+		err := yaml.Unmarshal(msg.Data, &data)
+		if err != nil {
+			fmt.Println("Error unmarshaling YAML data:", err)
+		}
 	case ipc.DATA_BIN:
 		// Parse the binary data
 		fmt.Println("Data is binary / generic data")
@@ -257,36 +281,70 @@ func parseData(msg ipc.IPCMessage) ipc.GenericData {
 	return data
 }
 
-// handleConnection handles the incoming connection
-func handleConnection(c net.Conn) {
-	// defer c.Close() // May not be needed due to Close() in Cleanup()
-	util.PrintColorf(util.LightCyan, "[🔌SOCKETS] Handling connection...")
-
-	request, err := parseConnection(c)
-	if err != nil {
-		log.Printf("Parse error: %v\n", err)
-	}
-
-	util.PrintDebug("Request parsed: " + strconv.Itoa(request.Checksum32))
-
-	// Process the request...
-	util.PrintColorf(util.BgGreen, "Received: %+v\n", request)
-
-	// Finally, respond to the client
-	err = respond(c)
-	if err != nil {
-		util.PrintError("handleConnection: " + err.Error())
-	}
+// Calculate the response time
+func responseTime(reqTime int64) {
+	currTime := util.UnixNanoTimestamp()
+	diff := currTime - reqTime
+	fmt.Printf("Response time: %d\n", diff)
+	fmt.Printf("Seconds: %f\n", float64(diff)/1e9)
+	fmt.Printf("Milliseconds: %f\n", float64(diff)/1e6)
+	fmt.Printf("Microseconds: %f\n", float64(diff)/1e3)
 }
 
-func respond(c net.Conn) error {
+// handleConnection handles the incoming connection
+func handleConnection(c net.Conn) {
+	defer c.Close()
+
+	util.PrintColorf(util.LightCyan, "[🔌SOCKETS] Handling connection...")
+
+	for {
+		request, err := parseConnection(c)
+		if err != nil {
+			if err == io.EOF {
+				util.PrintDebug("Connection closed by client")
+				break
+			}
+			util.PrintError("Error parsing request: " + err.Error())
+			break
+		}
+
+		util.PrintDebug("Request parsed: " + strconv.Itoa(request.Checksum32))
+
+		// Process the request...
+		util.PrintColorf(util.BgGreen, "Received: %+v\n", request)
+
+		// Finally, respond to the client
+		err = respond(c, request)
+		if err != nil {
+			util.PrintError("handleConnection: " + err.Error())
+			break
+		}
+	}
+
+}
+
+func respond(c net.Conn, req ipc.IPCRequest) error {
 	util.PrintDebug("Responding to the client...")
-	var responseBuffer bytes.Buffer
-	response, err := NewIPCMessage("bivrost", ipc.MSG_ACK, []byte("Message received"))
+	// responseMsg := fmt.Sprintf("Acknowledged message with checksum: %d", req.Checksum32)
+	// r := ipc.IPCResponse{
+	// 	Request:    req,
+	// 	Success:    true,
+	// 	Message:    responseMsg,
+	// 	Checksum32: req.Checksum32,
+	// }
+	var response *ipc.IPCRequest
+	var err error
+	if req.Checksum32 == int(crc(req.Message.Data)) {
+		response, err = NewIPCMessage("bivrost", ipc.MSG_ACK, []byte("OK"))
+	} else {
+		fmt.Printf("Request checksum: %v\nCalculated checksum: %v\n", req.Checksum32, crc(req.Message.Data))
+		response, err = NewIPCMessage("bivrost", ipc.MSG_ERROR, []byte("CHKSUM ERROR"))
+	}
 	if err != nil {
 		return err
 	}
 
+	var responseBuffer bytes.Buffer
 	encoder := gob.NewEncoder(&responseBuffer)
 	err = encoder.Encode(response)
 	if err != nil {
@@ -297,11 +355,11 @@ func respond(c net.Conn) error {
 	if err != nil {
 		return err
 	}
+	util.PrintColor(util.BgGreen, "🚀 Response sent!")
 
-	util.PrintColor(util.BgGreen, "Response sent!")
+	responseTime(req.Timestamp)
 
 	return nil
-
 }
 
 // TODO's: 1]

@@ -58,6 +58,16 @@ func main() {
 
 	// Parse the command line arguments (flags)
 	flags.ParseFlags()
+
+	// Load the config
+	cfg, err := config.LoadConfig(*flags.Params.ConfigPath)
+	if err != nil {
+		fmt.Println(err)
+		fmt.Println("Exiting...")
+		return
+	}
+
+	// Testing db connection
 	if *flags.Params.Test != "" {
 		if *flags.Params.Test == "db" {
 			testDbConnection()
@@ -71,14 +81,6 @@ func main() {
 	// Testing the proto connection
 	// go testProtoConnection()
 	go testUDS()
-
-	// Load the config
-	cfg, err := config.LoadConfig(*flags.Params.ConfigPath)
-	if err != nil {
-		fmt.Println(err)
-		fmt.Println("Exiting...")
-		return
-	}
 
 	// Connect to database
 	db, err := middleware.NewDBService().Connect(cfg.Database.Path)

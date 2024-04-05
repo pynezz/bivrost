@@ -8,6 +8,7 @@ type IPCRequest struct {
 	MessageSignature []byte     // The message signature, used to declare an ipcRequest
 	Header           IPCHeader  // The header - containing type and identifier
 	Message          IPCMessage // The message
+	Timestamp        int64      // Timestamp of the message
 	Checksum32       int        // Checksum of the message byte data
 }
 
@@ -20,6 +21,13 @@ type IPCMessage struct {
 	Datatype   DataType // Type of the data ("json", "string", "int", etc.)
 	Data       []byte   // The actual data
 	StringData string   // String representation of the data if applicable
+}
+
+type IPCResponse struct {
+	Request    IPCRequest // The request that was sent
+	Success    bool       // Was the request successful
+	Message    string     // Message from the server
+	Checksum32 int        // Checksum of the message byte data
 }
 
 // GenericData is a generic map for data. It can be used to store any data type.
@@ -79,6 +87,10 @@ var IDENTIFIERS = map[string][4]byte{
 
 func (r *IPCRequest) Stringify() string {
 	h := fmt.Sprintf("HEADER:\n\tIdentifier: %v\nMessageType: %v\n", r.Header.Identifier, r.Header.MessageType)
+	// m := "MESSAGE:\n"
+	// for i, data := range r.Message.Data {
+	// 	m += fmt.Sprintf("\tData[%d]: %v\n", i, data)
+	// }
 	m := fmt.Sprintf("MESSAGE:\n\tData: %v\n\tStringData: %v\n", r.Message.Data, r.Message.StringData)
 	c := fmt.Sprintf("CHECKSUM: %v\n", r.Checksum32)
 	return h + m + c

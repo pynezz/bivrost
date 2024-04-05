@@ -8,7 +8,6 @@ import (
 
 	"github.com/pynezz/bivrost/internal/ipc"
 	"github.com/pynezz/bivrost/internal/ipc/ipcclient"
-	"github.com/pynezz/bivrost/internal/util"
 )
 
 func main() {
@@ -54,17 +53,15 @@ func main() {
 						return
 					}
 
+					if message == "json" {
+						sendGenericMessage(client, testJSONMessage())
+						continue
+					}
+
 					// Create the defined message request
 					msg := client.CreateReq(message, ipc.MSG_MSG, ipc.DATA_TEXT)
 					err := client.SendIPCMessage(msg)
 					if err != nil {
-						fmt.Println(err)
-					}
-
-					// Now wait for the response
-					err = client.AwaitResponse()
-					if err != nil {
-						util.PrintError("Error receiving response from server")
 						fmt.Println(err)
 					}
 
@@ -82,6 +79,24 @@ func main() {
 	fmt.Println("End of program. Waiting for SIGINT or SIGTERM...")
 	<-c
 	fmt.Println("Exiting...")
+}
+
+type testJSON struct {
+	ID        int    `json:"id"`
+	IP        string `json:"ip"`
+	Msg       string `json:"msg"`
+	Vendor    string `json:"vendor"`
+	Malicious bool   `json:"malicious"`
+}
+
+func testJSONMessage() testJSON {
+	return testJSON{
+		ID:        1,
+		IP:        "192.168.0.1",
+		Msg:       "This is a test message",
+		Vendor:    "TestVendor",
+		Malicious: false,
+	}
 }
 
 func sendGenericMessage(client *ipcclient.IPCClient, message interface{}) {

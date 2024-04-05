@@ -3,6 +3,7 @@ package ipcclient
 import (
 	"bytes"
 	"encoding/gob"
+	"encoding/json"
 	"fmt"
 	"hash/crc32"
 	"net"
@@ -10,6 +11,8 @@ import (
 	"path"
 	"strconv"
 	"time"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/pynezz/bivrost/internal/fsutil"
 	"github.com/pynezz/bivrost/internal/ipc"
@@ -53,6 +56,7 @@ func init() {
 	gob.Register(&ipc.IPCMessage{})
 	gob.Register(&ipc.IPCHeader{})
 	gob.Register(&ipc.IPCMessageId{})
+	gob.Register(&ipc.IPCResponse{})
 }
 
 // Set description with format string for easier type conversion
@@ -159,11 +163,30 @@ func userRetry() bool {
 }
 
 func (c *IPCClient) AwaitResponse() error {
+	var err error
+
 	if c.conn == nil {
 		util.PrintError("Connection not established")
 	}
 
-	parseConnection(c.conn)
+	req, err := parseConnection(c.conn)
+	if err != nil {
+		if err.Error() == "EOF" {
+			util.PrintWarning("Client disconnected")
+			return err
+		}
+		util.PrintError("Error parsing the connection")
+		return err
+	}
+	util.PrintSuccess("Received response from server: " + req.Message.StringData)
+
+	if string(req.Message.Data) == "OK" {
+		util.PrintColorf(util.LightCyan, "Message type: %v\n", req.Header.MessageType)
+		util.PrintSuccess("Checksums match")
+	} else {
+		util.PrintError("Checksums do not match")
+		return fmt.Errorf("checksums do not match")
+	}
 
 	return nil
 }
@@ -193,6 +216,14 @@ func (c *IPCClient) SendIPCMessage(msg *ipc.IPCRequest) error {
 	}
 	util.PrintSuccess("Message sent: " + msg.Message.StringData)
 
+	util.PrintDebug("Awaiting response...")
+	err = c.AwaitResponse()
+	if err != nil {
+		util.PrintError("Error receiving response from server")
+		fmt.Println(err)
+		return err
+	}
+
 	return nil
 }
 
@@ -212,27 +243,43 @@ func (c *IPCClient) CreateReq(message string, t ipc.MsgType, dataType ipc.DataTy
 			Data:       []byte(message),
 			StringData: message,
 		},
+		Timestamp:  util.UnixNanoTimestamp(),
 		Checksum32: int(checksum),
 	}
 }
 
 func (c *IPCClient) CreateGenericReq(message interface{}, t ipc.MsgType, dataType ipc.DataType) *ipc.IPCRequest {
+	util.PrintDebug("[CLIENT] Creating a generic IPC request...")
 	var data []byte
+	var err error
+
 	switch dataType {
 	case ipc.DATA_TEXT:
 		data = []byte(message.(string))
 	case ipc.DATA_INT:
 		data = []byte(strconv.Itoa(message.(int)))
 	case ipc.DATA_JSON:
-		data = []byte(fmt.Sprintf("%v", message))
+		data, err = json.Marshal(message)
+		if err != nil {
+			// Handle the error
+			util.PrintError("[CLIENT] Error marshaling JSON data:" + err.Error())
+			return nil
+		}
+		util.PrintDebug("[CLIENT] Marshaling JSON data...")
+
 	case ipc.DATA_YAML:
-		data = []byte(fmt.Sprintf("%v", message))
+		fmt.Println("[CLIENT] Marshaling YAML data...")
+		data, err = yaml.Marshal(message)
+		if err != nil {
+			util.PrintError("[CLIENT] Error marshaling YAML data:" + err.Error())
+			return nil
+		}
 	case ipc.DATA_BIN:
 		data = message.([]byte)
 	}
 
 	checksum := crc32.ChecksumIEEE(data)
-	util.PrintDebug("Created IPC checksum: " + strconv.Itoa(int(checksum)))
+	util.PrintDebug("[CLIENT] Created IPC checksum: " + strconv.Itoa(int(checksum)))
 
 	return &ipc.IPCRequest{
 		MessageSignature: ipc.IPCID,
@@ -241,12 +288,42 @@ func (c *IPCClient) CreateGenericReq(message interface{}, t ipc.MsgType, dataTyp
 			MessageType: byte(t),
 		},
 		Message: ipc.IPCMessage{
-			Datatype:   ipc.DATA_JSON,
+			Datatype:   dataType,
 			Data:       data,
 			StringData: fmt.Sprintf("%v", message),
 		},
+		Timestamp:  util.UnixNanoTimestamp(),
 		Checksum32: int(checksum),
 	}
+}
+
+// Return the parsed IPCRequest object
+func parseConnection(c net.Conn) (ipc.IPCRequest, error) {
+	var request ipc.IPCRequest
+	// var reqBuffer bytes.Buffer
+
+	util.PrintDebug("[CLIENT] Trying to decode the bytes to a request struct...")
+	util.PrintColorf(util.LightCyan, "[CLIENT] Decoding the bytes to a request struct... %v", c)
+
+	decoder := gob.NewDecoder(c)
+	err := decoder.Decode(&request)
+	if err != nil {
+		if err.Error() == "EOF" {
+			util.PrintWarning("parseConnection: EOF error, connection closed")
+			return request, err
+		}
+		util.PrintWarning("parseConnection: Error decoding the request \n > " + err.Error())
+		return request, err
+	}
+
+	util.PrintDebug("Trying to encode the bytes to a request struct...")
+	fmt.Println(request.Stringify())
+	util.PrintDebug("--------------------")
+
+	util.PrintSuccess("[ipcclient.go] Parsed the message signature!")
+	fmt.Printf("Message ID: %v\n", request.MessageSignature)
+
+	return request, nil
 }
 
 // Close the connection
@@ -262,29 +339,4 @@ func getKeyFromValue(value [4]byte) (string, bool) {
 		}
 	}
 	return "", false
-}
-
-// Return the parsed IPCRequest object
-func parseConnection(c net.Conn) (ipc.IPCRequest, error) {
-	var request ipc.IPCRequest
-	// var reqBuffer bytes.Buffer
-
-	util.PrintDebug("[CLIENT] Trying to decode the bytes to a request struct...")
-	util.PrintColorf(util.LightCyan, "[CLIENT] Decoding the bytes to a request struct... %v", c)
-
-	decoder := gob.NewDecoder(c)
-	err := decoder.Decode(&request)
-	if err != nil {
-		util.PrintWarning("parseConnection: Error decoding the request: \n > " + err.Error())
-		return request, err
-	}
-
-	util.PrintDebug("Trying to encode the bytes to a request struct...")
-	fmt.Println(request.Stringify())
-	util.PrintDebug("--------------------")
-
-	util.PrintSuccess("[ipcclient.go] Parsed the message signature!")
-	fmt.Printf("Message ID: %v\n", request.MessageSignature)
-
-	return request, nil
 }
