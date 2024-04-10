@@ -6,9 +6,7 @@
 package ipc
 
 import (
-	"fmt"
-	"log"
-	"net"
+	"encoding/gob"
 	"os"
 	"path"
 	"time"
@@ -23,156 +21,43 @@ const (
 	STREAM = "SOCK_STREAM" // Stream socket 		(like TCP)
 	DGRAM  = "SOCK_DGRAM"  // Datagram socket 		(like UDP)
 
-	// Path = "/tmp/bivrost.sock"
-
 	// Network values if applicable
 	Network = "tcp"
 	Address = "localhost:50052"
 	Timeout = 1 * time.Second
 )
 
-var (
-	IPCID = []byte("BIVIPC") // To identify if the message is an IPC message
-)
+var IPCID []byte // Identifier of the IPC communication
 
 type IPCMessageId []byte // Identifier of the message
 
-var Socks map[string]*UnixSocket // NB! Probably not needed
+func SetIPCID(id []byte) {
+	if IPCID == nil {
+		IPCID = id
+		util.PrintSuccess("Set IPC ID to " + string(IPCID))
+	} else {
+		util.PrintWarning("IPC ID already set to " + string(IPCID))
+	}
+}
+
+func GetIPCStrID() string {
+	return string(IPCID)
+}
+
+func DefaultSock(name string) string {
+	tmpDir := os.TempDir()                     // Temporary directory (eg. /tmp)
+	subTmpDir := path.Join(tmpDir, name)       // Subdirectory in the temporary directory (eg. /tmp/<subTmpDir>)
+	sock := path.Join(subTmpDir, name+".sock") // Socket file path (eg. /tmp/<subTmpDir>/<name>)
+	sock = path.Clean(sock)                    // Clean the path
+
+	return sock
+}
 
 func init() {
-	Socks = make(map[string]*UnixSocket) // NB! Probably not needed
-}
 
-// UnixSocket represents a UNIX domain socket server
-// NB! Probably not needed
-type UnixSocket struct {
-	name string // For naming the server, e.g. "Module IPC Threat Intel"
-	desc string // For describing the server, e.g. "IPC server for the Threat Intel Module"
-
-	af   string // Address family (UNIX, INET, WINSOCK)
-	path string // Path to the socket file (if using UNIX domain socket)
-
-	// addr     net.UnixAddr     // UNIX domain socket address
-	// conn     net.UnixConn     // UNIX domain socket connection
-	// listener net.UnixListener // UNIX domain socket listener
-	// syscall  int              // System call
-
-	// Run uintptr // Run the server
-
-	IsConnected bool      // Is the server connected
-	connection  *net.Conn // Connection to the server
-}
-
-// Will establish a connection to the socket at the given path
-// with the network protocol "unix" as specified in the net package
-// func (s *UnixSocket) ConnectSocket() (*net.Conn, error) {
-// 	// Connect to the socket
-// 	conn, err := net.Dial(AF_UNIX, path); if err != nil {
-// 		return nil, err
-// 	}
-
-// 	defer conn.Close()
-
-// 	fmt.Fprintf(conn, "Hello\n")
-
-// 	return &conn, nil
-// }
-
-// NB! Probably not needed
-func (s *UnixSocket) GetConn() *net.Conn {
-	return s.connection
-}
-
-func (s *UnixSocket) Listen() error {
-	l, err := net.Listen(s.af, s.path)
-	if err != nil {
-		return err
-	}
-	defer l.Close()
-
-	fmt.Println("Listening on ", s.path)
-
-	for {
-		fmt.Println("Waiting for connection...")
-		c, err := l.Accept()
-		if err != nil {
-			log.Fatalf("failed to accept: %v", err)
-		}
-
-		fmt.Println("Incoming connection: ", c.LocalAddr().String())
-		go s.handleListener(c)
-	}
-}
-
-// NewSocket creates a new UNIX domain socket server
-func NewSocket(name string, desc string) (*UnixSocket, error) {
-	tmpDir := "/tmp/bivrost"
-	err := os.MkdirAll(tmpDir, os.ModePerm)
-	if err != nil {
-		return nil, err
-	}
-
-	fmt.Println("Temp dir: ", tmpDir)
-
-	// path := path.Join(tmpDir, "bivrost-"+name+".sock")
-	path := path.Join(tmpDir, "bivrost.sock")
-
-	fmt.Println("Full path: ", path)
-
-	var choice string // For the choice of the socket type
-	_, err = fmt.Sscanf("Do you want to continue? [Y/n] > ", "%s", &choice)
-	if err != nil {
-		return nil, err
-	}
-	if choice[0] == 'n' {
-		return nil, fmt.Errorf("[aborted] user chose to exit")
-	}
-
-	s := &UnixSocket{
-		name:       name,
-		desc:       desc,
-		af:         AF_UNIX,
-		path:       path,
-		connection: nil,
-	}
-
-	return s, nil
-}
-
-// StartUDSServer starts the UDS server
-func (s *UnixSocket) Initialize() error {
-	util.PrintInfo("Starting UNIX Domain Sockets SERVER...")
-
-	l, err := net.Listen(s.af, s.path)
-	if err != nil {
-		return err
-	}
-	defer l.Close()
-
-	for {
-		c, err := l.Accept()
-		if err != nil {
-			log.Fatalf("failed to accept: %v", err)
-		}
-		go s.handleConnection(c)
-	}
-}
-
-func (s *UnixSocket) handleListener(c net.Conn) {
-	log.Printf("Received connection from %v", c.LocalAddr())
-	fmt.Fprintf(c, "Hello, %s\n", c.RemoteAddr())
-	c.Close()
-}
-
-// handleConnection handles the connection
-func (s *UnixSocket) handleConnection(c net.Conn) {
-	log.Printf("Received connection from %v", c.RemoteAddr())
-	fmt.Fprintf(c, "Hello, %s\n", c.RemoteAddr())
-	c.Close()
-}
-
-func (s *UnixSocket) Cleanup() {
-
-	// Remove the socket file
-	os.RemoveAll(s.path)
+	gob.Register(IPCRequest{})
+	gob.Register(IPCMessage{})
+	gob.Register(IPCHeader{})
+	gob.Register(IPCMessageId{})
+	gob.Register(IPCResponse{})
 }

@@ -15,18 +15,17 @@ sources:
         - logs
     - name: threat intel
       type: module
-      location: /path/or/uri/to/module/output
-      format: json
+      location: ./modules/threat_intel/config.yaml
       tags:
         - intel
         - module
-    - name: thevalve
+    - name: anomaly detection
       type: module
-      location: ' '
-      format: raw
+      location: ./modules/anomaly_detection/config.yaml
       tags:
-        - credentials
-        - module
+       - anomaly
+       - detection
+       - module
 network:
     read_timeout: 10
     write_timeout: 10

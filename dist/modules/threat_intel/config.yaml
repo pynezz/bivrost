@@ -1,0 +1,14 @@
+## threat_intel module configuration
+name:
+  Threat Intel
+database:
+  path: ./thri_db.sqlite
+data_sources:
+  - name: postdata
+    type: logs
+    location: /var/logs/nginx/standard.log
+    format: json
+  - name: syslog
+    type: logs
+    location: /var/logs/sys.log
+    format: plain

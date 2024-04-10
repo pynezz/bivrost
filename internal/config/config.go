@@ -15,7 +15,7 @@ type Cfg struct {
 		Name     string   `yaml:"name"`
 		Type     string   `yaml:"type"`
 		Location string   `yaml:"location"`
-		Format   string   `yaml:"format"`
+		Format   string   `yaml:"format, omitempty"`
 		Tags     []string `yaml:"tags"`
 	} `yaml:"sources"`
 	Network struct {
@@ -84,19 +84,3 @@ func WriteConfig(cfg *Cfg, path string) error {
 
 	return nil
 }
-
-// FIBER says POST Method Not allowed.
-
-// The reason for this is that the Fiber framework does not allow the POST method by default.
-// To enable it, you need to add the following line to the main.go file:
-// app.Post("/config/:id", updateConfigHandler)
-// This will allow the POST method to be used on the /config/:id route.
-// But you also need to implement the updateConfigHandler function in the server.go file.
-// This function should handle the POST request and update the configuration.
-// Here is an example of how you can implement the updateConfigHandler function:
-// func updateConfigHandler(c *fiber.Ctx) error {
-// 	// Update the configuration here
-// 	id := c.Params("id")
-// 	fmt.Println("Updating configuration for ID:", id)
-// 	return c.SendString("Configuration updated")
-// }

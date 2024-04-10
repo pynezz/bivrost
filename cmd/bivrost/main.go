@@ -160,7 +160,7 @@ func testUDS() {
 	socketPath := path.Join(bivrostTmpDir, "bivrost.sock")
 
 	util.PrintSuccess("New UNIX domain socket location: " + socketPath)
-	ipcServer := ipcserver.NewIPCServer(socketPath)
+	ipcServer := ipcserver.NewIPCServer("bivrost", "bivrost")
 	ok := ipcServer.InitServerSocket()
 	if !ok {
 		return

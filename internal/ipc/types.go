@@ -36,7 +36,37 @@ type IPCResponse struct {
 //
 //	var data GenericData = map[string]interface{}{"someKey": "someValue"}
 //	fmt.Println("Received data:", data["someKey"]) // Will print someValue
+
+// GenericData is a generic map for data. It can be used to store any data type.
 type GenericData map[string]interface{}
+
+type Metadata struct {
+	Source      string      `json:"source"`      // Source. Ex: sigma
+	Destination Destination `json:"destination"` // Destination. Ex: { name: database, info: "table=threat_intel" }
+	Method      string      `json:"method"`      // Using HTTP verbs to differentiate between requests (ps: this got nothing to do with actual HTTP)
+}
+
+type Destination struct {
+	Object Object `json:"destination" yaml:"destination"` // Object (descriptor of the destination) should unmarsal as Destination
+}
+
+type GetJSON struct {
+	Metadata    Metadata `json:"metadata"`
+	Description string   `json:"description"`
+}
+
+type Object struct {
+	Id   string `json:"id"`
+	Name string `json:"name"`
+	Info string `json:"info"`
+}
+
+type Database struct {
+	Name  string `json:"name"`
+	Table string `json:"table"`
+}
+
+// ----------------------------
 
 type MsgType int
 type DataType int
@@ -81,9 +111,7 @@ var MSGTYPE = map[string]byte{
 	"unknown":    byte(MSG_UNKNOWN),
 }
 
-var IDENTIFIERS = map[string][4]byte{
-	"threat_intel": [4]byte([]byte("THRI")), // Threat Intel (should equal to 0x54, 0x48, 0x52, 0x49)
-}
+var IDENTIFIERS = map[string][4]byte{}
 
 func (r *IPCRequest) Stringify() string {
 	h := fmt.Sprintf("HEADER:\n\tIdentifier: %v\nMessageType: %v\n", r.Header.Identifier, r.Header.MessageType)
@@ -94,4 +122,8 @@ func (r *IPCRequest) Stringify() string {
 	m := fmt.Sprintf("MESSAGE:\n\tData: %v\n\tStringData: %v\n", r.Message.Data, r.Message.StringData)
 	c := fmt.Sprintf("CHECKSUM: %v\n", r.Checksum32)
 	return h + m + c
+}
+
+func SetIdentifier(name string, id [4]byte) {
+	IDENTIFIERS[name] = id
 }

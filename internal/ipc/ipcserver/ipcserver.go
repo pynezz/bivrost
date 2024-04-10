@@ -1,6 +1,7 @@
 package ipcserver
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/gob"
 	"encoding/json"
@@ -10,7 +11,9 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"strings"
 
+	"github.com/pynezz/bivrost/internal/fsutil"
 	"github.com/pynezz/bivrost/internal/ipc"
 	"github.com/pynezz/bivrost/internal/util"
 	"gopkg.in/yaml.v3"
@@ -27,50 +30,104 @@ const (
 /* IDENTIFIERS
  * To identify the module, the client will send a 4 byte identifier as part of the header.
  */
-var IDENTIFIERS map[string][]byte
-
-var (
-	THREAT_INTEL = []byte{0x54, 0x48, 0x52, 0x49} // "THRI"
-	BIVROST      = []byte{0x42, 0x49, 0x56, 0x52} // "BIVR"
-)
+var MODULEIDENTIFIERS map[string][]byte
 
 var MSGTYPE map[string]byte
+
+var SERVERIDENTIFIER [4]byte
+
+var IPCID []byte
 
 /* TYPES
  * Types for the IPC communication between the connector and the other modules.
  */
 type IPCServer struct {
-	path string
-
-	conn net.Listener
+	path       string
+	identifier string
+	conn       net.Listener
 }
-
-// (i) vv Highly likely not needed!->
-type Connections struct {
-	sockets map[string]*IPCServer
-}
-
-var connections Connections
-
-// (i) ^^ likely not needed ^^ -- <-
 
 func init() {
-	IDENTIFIERS = map[string][]byte{
-		"threat_intel": THREAT_INTEL,
-		"bivrost":      BIVROST,
-	}
-
-	gob.Register(ipc.IPCRequest{})
-	gob.Register(ipc.IPCMessage{})
-	gob.Register(ipc.IPCHeader{})
-	gob.Register(ipc.IPCMessageId{})
-	gob.Register(&ipc.IPCResponse{})
+	MODULEIDENTIFIERS = map[string][]byte{}
 }
 
-func NewIPCServer(path string) *IPCServer {
-	return &IPCServer{
-		path: path,
+func LoadModules(path string) {
+	if !fsutil.FileExists(path) {
+		util.PrintError("LoadModules(): File does not exist: " + path)
 	}
+	util.PrintSuccess("File exists: " + path)
+	f, err := os.Open(path)
+	if err != nil {
+		util.PrintError("LoadModules(): " + err.Error())
+		return
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := scanner.Text()
+		fmt.Println(line)
+		parts := strings.Split(line, " ")
+		if len(parts[0]) < 1 {
+			// empty line
+			continue
+		}
+		firstChar := parts[0][0]
+		if firstChar == '#' || firstChar == ' ' || firstChar == '\t' || firstChar == '/' || firstChar == '*' || firstChar == '\n' || firstChar == '\r' {
+			// comment
+			continue
+		}
+
+		for i, part := range parts {
+			if part == "\t" || part == " " {
+				// skip
+				continue
+			}
+			parts[i] = strings.TrimSpace(part)
+		}
+
+		AddModule(parts[0], []byte(parts[1])) // Add module to the server
+		util.PrintColorf(util.LightCyan, "Loaded module: %s", parts[0])
+	}
+}
+
+// NewIPCServer creates a new IPC server and returns it.
+func NewIPCServer(name string, identifier string) *IPCServer {
+	path := ipc.DefaultSock(name)
+	IPCID = []byte(identifier)
+	ipc.SetIPCID(IPCID)
+	SetServerIdentifier(IPCID)
+
+	util.PrintColorf(util.LightCyan, "[🔌SOCKETS] IPC server path: %s", path)
+
+	return &IPCServer{
+		path:       path,
+		identifier: identifier,
+		conn:       nil,
+	}
+}
+
+// Add a new module identifier to the map
+func AddModule(identifier string, id []byte) {
+	if len(id) > 4 {
+		util.PrintError("AddModule(): Identifier length must be 4 bytes")
+		util.PrintInfo("Truncating the identifier to 4 bytes")
+		id = id[:4]
+	}
+	MODULEIDENTIFIERS[identifier] = id
+
+	util.PrintSuccess("added module:" + string(MODULEIDENTIFIERS[identifier]))
+}
+
+// Set the server identifier to the SERVERIDENTIFIER variable
+func SetServerIdentifier(id []byte) {
+	if len(id) > 4 {
+		util.PrintError("SetServerIdentifier(): Identifier length must be 4 bytes")
+		util.PrintInfo("Truncating the identifier to 4 bytes")
+		id = id[:4]
+	}
+	SERVERIDENTIFIER = [4]byte(id) // Convert the slice to an array
+	util.PrintSuccess("Set server identifier: " + string(SERVERIDENTIFIER[:]))
 }
 
 // Write a socket file and add it to the map
@@ -100,37 +157,30 @@ func (s *IPCServer) Listen() {
 			continue
 		}
 
-		handleConnection(conn)
+		s.handleConnection(conn)
 	}
 }
 
-func Cleanup() {
-	// for _, server := range connections.sockets {
-	// 	util.PrintItalic("Cleaning up IPC server: " + server.path)
-	// 	err := os.Remove(server.path)
-	// 	if err != nil {
-	// 		util.PrintError("Cleanup(): " + err.Error())
-	// 	}
+func NewIPCID(identifier string, id []byte) {
+	if len(id) > 4 {
+		util.PrintError("NewIPCID(): Identifier length must be 4 bytes")
+		util.PrintInfo("Truncating the identifier to 4 bytes")
+		id = id[:4]
+	}
+	ipc.SetIPCID(id)
+}
 
-	// 	util.PrintItalic("Closing connection: " + server.conn.Addr().String())
-	// 	server.conn.Close()
-	// }
+func Cleanup() {
 	util.PrintItalic("\t... IPC server cleanup complete.")
 }
 
 func crc(b []byte) uint32 {
 	return crc32.ChecksumIEEE(b)
-	// s, err := c.Write(b)
-	// if err != nil {
-	// 	util.PrintError("crc(): " + err.Error())
-	// 	return 0xFF // Error
-	// }
-	// return s
 }
 
 // Function to create a new IPCMessage based on the identifier key
 func NewIPCMessage(identifierKey string, messageType byte, data []byte) (*ipc.IPCRequest, error) {
-	identifier, ok := IDENTIFIERS[identifierKey]
+	identifier, ok := MODULEIDENTIFIERS[identifierKey]
 	if !ok {
 		return nil, fmt.Errorf("invalid identifier key: %s", identifierKey)
 	}
@@ -154,50 +204,6 @@ func NewIPCMessage(identifierKey string, messageType byte, data []byte) (*ipc.IP
 		Timestamp:  util.UnixNanoTimestamp(),
 		Checksum32: int(crcsum32),
 	}, nil
-}
-
-func newIPCResponse(req ipc.IPCRequest, success bool, message string) *ipc.IPCResponse {
-	return &ipc.IPCResponse{
-		Request:    req,
-		Success:    success,
-		Message:    message,
-		Checksum32: int(req.Checksum32),
-	}
-}
-
-// Check the message signature (the first 6 bytes) to see if it's a valid IPC message
-func parseMessageSignature(message []byte) (ipc.IPCMessageId, error) {
-	util.PrintWarning("Possibly error and bug prone section ahead! 🐞")
-	util.PrintWarning("Will try to parse the bytes of the message to see if it's a valid IPC message... 🧐")
-
-	if len(message) < 6 {
-		return nil, fmt.Errorf("parseMessageSignature: Message too short")
-	}
-
-	var bBuffer bytes.Buffer
-	decoder := gob.NewDecoder(&bBuffer)
-	err := decoder.Decode(&message)
-	if err != nil {
-		return nil, err
-	}
-
-	util.PrintDebug("Decoded message: \n " + bBuffer.String())
-
-	var id ipc.IPCMessageId
-	// Convert bBuffer to a byte slice before slicing it
-	copy(id[:], bBuffer.Bytes()[:len(ipc.IPCID)])
-
-	util.PrintWarning("Attempting to compare the message signature...")
-
-	if bytes.Equal(id, ipc.IPCID) {
-		util.PrintSuccess("Message signature is valid!")
-		util.PrintDebug("Message signature: " + string(id))
-		return id, nil
-	}
-
-	util.PrintError("Message signature is invalid!")
-	util.PrintError("Message signature: " + string(id))
-	return nil, fmt.Errorf("parseMessageSignature: Invalid message signature")
 }
 
 // Return the parsed IPCRequest object
@@ -292,7 +298,7 @@ func responseTime(reqTime int64) {
 }
 
 // handleConnection handles the incoming connection
-func handleConnection(c net.Conn) {
+func (s *IPCServer) handleConnection(c net.Conn) {
 	defer c.Close()
 
 	util.PrintColorf(util.LightCyan, "[🔌SOCKETS] Handling connection...")
@@ -314,7 +320,7 @@ func handleConnection(c net.Conn) {
 		util.PrintColorf(util.BgGreen, "Received: %+v\n", request)
 
 		// Finally, respond to the client
-		err = respond(c, request)
+		err = s.respond(c, request)
 		if err != nil {
 			util.PrintError("handleConnection: " + err.Error())
 			break
@@ -323,22 +329,24 @@ func handleConnection(c net.Conn) {
 
 }
 
-func respond(c net.Conn, req ipc.IPCRequest) error {
+// c is the connection to the client
+// req is the request from the client
+func (s *IPCServer) respond(c net.Conn, req ipc.IPCRequest) error {
+	if req.Checksum32 == 0 {
+		util.PrintWarning("Checksum is 0, skipping response")
+		return nil
+	}
+
 	util.PrintDebug("Responding to the client...")
-	// responseMsg := fmt.Sprintf("Acknowledged message with checksum: %d", req.Checksum32)
-	// r := ipc.IPCResponse{
-	// 	Request:    req,
-	// 	Success:    true,
-	// 	Message:    responseMsg,
-	// 	Checksum32: req.Checksum32,
-	// }
+	moduleId := string(req.Header.Identifier[:])
 	var response *ipc.IPCRequest
 	var err error
 	if req.Checksum32 == int(crc(req.Message.Data)) {
-		response, err = NewIPCMessage("bivrost", ipc.MSG_ACK, []byte("OK"))
+		// TODO: Refactor. Not very pretty. (the identifier key part)
+		response, err = NewIPCMessage(moduleId, ipc.MSG_ACK, []byte("OK"))
 	} else {
 		fmt.Printf("Request checksum: %v\nCalculated checksum: %v\n", req.Checksum32, crc(req.Message.Data))
-		response, err = NewIPCMessage("bivrost", ipc.MSG_ERROR, []byte("CHKSUM ERROR"))
+		response, err = NewIPCMessage(moduleId, ipc.MSG_ERROR, []byte("CHKSUM ERROR"))
 	}
 	if err != nil {
 		return err
@@ -360,6 +368,24 @@ func respond(c net.Conn, req ipc.IPCRequest) error {
 	responseTime(req.Timestamp)
 
 	return nil
+}
+
+type ReturnData struct {
+	Metadata ipc.Metadata `json:"metadata"`
+	Data     interface{}  `json:"data"`
+}
+
+type DataSource struct {
+}
+
+// TODO: Where should we tell the server where to get the logs from?
+func (d *ReturnData) GetLogs(path string, filter string) {
+	// Read the logs from the file
+	if fsutil.FileExists(path) {
+
+	}
+
+	// Not sure if this fits here. Might rather implement it in the internal package
 }
 
 // TODO's: 1]
