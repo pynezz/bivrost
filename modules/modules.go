@@ -35,7 +35,9 @@ func LoadModules(config config.Cfg) error {
 		return fmt.Errorf("modules already loaded")
 	}
 	Modules = make(map[string][]Module)
-	Mids := make(ModuleIdentifiers)
+
+	var m ModuleIdentifiers = make(map[string][4]byte)
+	Mids = m
 
 	modules := func() []Module {
 		var m []Module

@@ -160,14 +160,6 @@ func testUDS() {
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-
-	// Ensuring that the correct temp path directory is used regardless of the operating system
-	// tmpDir := os.TempDir()
-	// bivrostTmpDir := path.Join(tmpDir, "bivrost")
-	// socketPath := path.Join(bivrostTmpDir, "bivrost.sock")
-	// socketPath = fsutil.PathConvert(socketPath)
-
-	// util.PrintSuccess("New UNIX domain socket location: " + socketPath)
 	ipcServer := ipcserver.NewIPCServer("bivrost", "bivrost")
 	ok := ipcServer.InitServerSocket()
 	if !ok {
@@ -175,13 +167,11 @@ func testUDS() {
 	}
 
 	// TODO: Check if this is more applicable: https://www.man7.org/linux/man-pages/man7/unix.7.html
-	go ipcServer.Listen()
+	ipcServer.Listen()
 
 	util.PrintItalic("Waiting for SIGINT or SIGTERM... Press Ctrl+C to exit.")
 	<-c
-
 	ipcserver.Cleanup()
-
 	fmt.Println("Done cleaning up. Exiting...")
 	// uds, err := connector.NewIPC("test", "Test socket")
 	// if err != nil {

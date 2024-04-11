@@ -99,7 +99,7 @@ func NewIPCServer(name string, identifier string) *IPCServer {
 	ipc.SetIPCID(IPCID)
 	SetServerIdentifier(IPCID)
 
-	util.PrintColorf(util.LightCyan, "[🔌SOCKETS] IPC server path: %s", path)
+	util.PrintColorf(util.LightCyan, "[SOCKETS] IPC server path: %s", path)
 
 	return &IPCServer{
 		path:       path,
@@ -138,7 +138,6 @@ func (s *IPCServer) InitServerSocket() bool {
 		util.PrintError("InitServerSocket(): Failed to remove old socket: " + err.Error())
 		return false
 	}
-
 	return true
 }
 
@@ -146,21 +145,20 @@ func (s *IPCServer) InitServerSocket() bool {
 func (s *IPCServer) Listen() {
 	util.PrintColorBold(util.DarkGreen, "🎉 IPC server running!")
 
-	// TODO: As of now, the server will only handle one connection at a time
+	// TODO: As of now, the server will only handle one connection at a time (hopefully fixed now)
 	s.conn, _ = net.Listen(AF_UNIX, s.path)
-	util.PrintColorf(util.LightCyan, "[🔌SOCKETS] Starting listener on %s", s.path)
+	util.PrintColorf(util.LightCyan, "[SOCKETS] Starting listener on %s", s.path)
 
 	for {
 		util.PrintDebug("Waiting for connection...")
 		conn, err := s.conn.Accept()
-		util.PrintColorf(util.LightCyan, "[🔌SOCKETS]: New connection from %s", conn.LocalAddr().String())
+		util.PrintColorf(util.LightCyan, "[SOCKETS]: New connection from %s", conn.LocalAddr().String())
 
 		if err != nil {
 			util.PrintError("Listen(): " + err.Error())
 			continue
 		}
-
-		s.handleConnection(conn)
+		go s.handleConnection(conn) // Handle the connection in a separate goroutine to handle multiple connections
 	}
 }
 
@@ -168,15 +166,9 @@ func (s *IPCServer) Listen() {
 func NewIPCMessage(identifierKey string, messageType byte, data []byte) (*ipc.IPCRequest, error) {
 	identifier := modules.Mids.GetModuleIdentifier(identifierKey)
 	util.PrintDebug("NewIPCMessage from module with key: " + identifierKey)
-	// identifier, ok := MODULEIDENTIFIERS[identifierKey]
-	// if !ok {
-	// 	return nil, fmt.Errorf("invalid identifier key: %s", identifierKey)
-	// }
 
 	var id [4]byte
 	copy(id[:], identifier[:4]) // Ensure no out of bounds panic
-
-	crcsum32 := crc(data)
 
 	message := ipc.IPCMessage{
 		Data:       data,
@@ -190,12 +182,11 @@ func NewIPCMessage(identifierKey string, messageType byte, data []byte) (*ipc.IP
 		},
 		Message:    message,
 		Timestamp:  util.UnixNanoTimestamp(),
-		Checksum32: int(crcsum32),
+		Checksum32: int(crc(data)),
 	}, nil
 }
 
 // Return the parsed IPCRequest object
-// TODO: Instead of returning the request, we should return the data
 func parseConnection(c net.Conn) (ipc.IPCRequest, error) {
 	var request ipc.IPCRequest
 	// var reqBuffer bytes.Buffer
@@ -208,11 +199,7 @@ func parseConnection(c net.Conn) (ipc.IPCRequest, error) {
 		util.PrintWarning("parseConnection: Error decoding the request: \n > " + err.Error())
 		return request, err
 	}
-	d := parseData(&request.Message) // TODO: Return this instead
-	if d == nil {
-		fmt.Println("Data is nil")
-		return request, nil
-	}
+
 	fmt.Printf("Message ID: %s\n", string(request.MessageSignature))
 
 	return request, nil
@@ -284,7 +271,6 @@ func parseData(msg *ipc.IPCMessage) ipc.GenericData {
 		} else {
 			fmt.Printf("Data: %v\n", data)
 		}
-
 		handleGenericData(data)
 
 	case ipc.DATA_YAML:
@@ -294,13 +280,11 @@ func parseData(msg *ipc.IPCMessage) ipc.GenericData {
 		if err != nil {
 			fmt.Println("Error unmarshaling YAML data:", err)
 		}
-
 		handleGenericData(data)
 
 	case ipc.DATA_BIN:
 		// Parse the binary data
 		fmt.Println("Data is binary / generic data")
-
 		handleGenericData(data)
 
 	default:
@@ -326,10 +310,10 @@ func handleGenericData(data ipc.GenericData) {
 func (s *IPCServer) handleConnection(c net.Conn) {
 	defer c.Close()
 
-	util.PrintColorf(util.LightCyan, "[🔌SOCKETS] Handling connection...")
+	util.PrintColorf(util.LightCyan, "[SOCKETS] Handling connection...")
 
 	for {
-		request, err := parseConnection(c)
+		inboundRequest, err := parseConnection(c)
 		if err != nil {
 			if err == io.EOF {
 				util.PrintDebug("Connection closed by client")
@@ -338,30 +322,35 @@ func (s *IPCServer) handleConnection(c net.Conn) {
 			util.PrintError("Error parsing request: " + err.Error())
 			break
 		}
-		util.PrintSuccess("Request received: " + string(request.Header.Identifier[:]))
-		fmt.Println(modules.Mids.GetModuleIdentifier(string(request.Header.Identifier[:]))) // What is this, Java? C++?
 
-		util.PrintDebug("Request parsed: " + strconv.Itoa(request.Checksum32))
+		d := parseData(&inboundRequest.Message) // TODO: Return this instead
+		if d == nil {
+			fmt.Println("Data is nil")
+		}
+
+		util.PrintSuccess("Request received: " + string(inboundRequest.Header.Identifier[:]))
+		modules.Mids.StoreModuleIdentifier(string(inboundRequest.Header.Identifier[:]), inboundRequest.Header.Identifier)
+		fmt.Println(modules.Mids.GetModuleIdentifier(string(inboundRequest.Header.Identifier[:]))) // Sorry about this
+		util.PrintDebug("Request parsed: " + strconv.Itoa(inboundRequest.Checksum32))
 
 		// Process the request...
-		util.PrintColorf(util.BgGreen, "Received: %+v\n", request)
+		util.PrintColorf(util.BgGreen, "Received: %+v\n", inboundRequest)
 
 		if parseMetadata(d) {
 			fmt.Println("Method: ", parseVerb(d))
 		}
 
 		// Finally, respond to the client
-		err = s.respond(c, request)
+		err = s.respond(c, inboundRequest)
 		if err != nil {
 			util.PrintError("handleConnection: " + err.Error())
 			break
 		}
 	}
-
 }
 
 // c is the connection to the client
-// req is the request from the client
+// req is the request from the client, but // TODO: It should be the request to the client
 func (s *IPCServer) respond(c net.Conn, req ipc.IPCRequest) error {
 	if req.Checksum32 == 0 {
 		util.PrintWarning("Checksum is 0, skipping response")
