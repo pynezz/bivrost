@@ -8,7 +8,7 @@
 name: Threat Intel
 identifier: THRI
 database:
-  path: ./thri_db.sqlite
+  path: ./thri_db.sqlite  # To be used by the bridge
 data_sources:
   - name: postdata
     type: logs

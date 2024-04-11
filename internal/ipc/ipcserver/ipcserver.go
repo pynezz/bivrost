@@ -145,6 +145,8 @@ func (s *IPCServer) InitServerSocket() bool {
 // Creates a new listener on the socket path (which should be set in the config in the future)
 func (s *IPCServer) Listen() {
 	util.PrintColorBold(util.DarkGreen, "🎉 IPC server running!")
+
+	// TODO: As of now, the server will only handle one connection at a time
 	s.conn, _ = net.Listen(AF_UNIX, s.path)
 	util.PrintColorf(util.LightCyan, "[🔌SOCKETS] Starting listener on %s", s.path)
 
@@ -160,23 +162,6 @@ func (s *IPCServer) Listen() {
 
 		s.handleConnection(conn)
 	}
-}
-
-func NewIPCID(identifier string, id []byte) {
-	if len(id) > 4 {
-		util.PrintError("NewIPCID(): Identifier length must be 4 bytes")
-		util.PrintInfo("Truncating the identifier to 4 bytes")
-		id = id[:4]
-	}
-	ipc.SetIPCID(id)
-}
-
-func Cleanup() {
-	util.PrintItalic("\t... IPC server cleanup complete.")
-}
-
-func crc(b []byte) uint32 {
-	return crc32.ChecksumIEEE(b)
 }
 
 // Function to create a new IPCMessage based on the identifier key
@@ -210,10 +195,10 @@ func NewIPCMessage(identifierKey string, messageType byte, data []byte) (*ipc.IP
 }
 
 // Return the parsed IPCRequest object
+// TODO: Instead of returning the request, we should return the data
 func parseConnection(c net.Conn) (ipc.IPCRequest, error) {
 	var request ipc.IPCRequest
 	// var reqBuffer bytes.Buffer
-
 	util.PrintDebug("Trying to decode the bytes to a request struct...")
 	util.PrintColorf(util.LightCyan, "Decoding the bytes to a request struct... %v", c)
 
@@ -223,49 +208,84 @@ func parseConnection(c net.Conn) (ipc.IPCRequest, error) {
 		util.PrintWarning("parseConnection: Error decoding the request: \n > " + err.Error())
 		return request, err
 	}
-	d := parseData(&request.Message)
-	fmt.Println("Vendor: ", d["vendor"])
-	// fmt.Println("Vendor: " + string(request.Message.Data["vendor"] ))
-
-	// Parse the encoded message
-
-	fmt.Println(request.Stringify())
-	util.PrintDebug("--------------------")
-	util.PrintSuccess("[ipcserver.go] Parsed the message signature!")
+	d := parseData(&request.Message) // TODO: Return this instead
+	if d == nil {
+		fmt.Println("Data is nil")
+		return request, nil
+	}
 	fmt.Printf("Message ID: %s\n", string(request.MessageSignature))
-
-	// Check the message signature
-	// TODO: Verify the message signature
 
 	return request, nil
 }
 
+func parseMetadata(msg ipc.GenericData) bool {
+
+	// TODO: Might be reasonable to implement the Metadata struct here (ipc.Metadata)
+	metadata := msg["metadata"]
+	if metadata == nil {
+		return false
+	}
+	source := metadata.(map[string]interface{})["source"]
+	destination := metadata.(map[string]interface{})["destination"].(map[string]interface{})["destination"]
+	destinationId := destination.(map[string]interface{})["id"]
+	destinationName := destination.(map[string]interface{})["name"]
+	destinationInfo := destination.(map[string]interface{})["info"]
+
+	method := metadata.(map[string]interface{})["method"]
+
+	v := ""
+	if method == "POST" {
+		v = "send data to"
+	} else if method == "GET" {
+		v = "get data from"
+	} else if method == "PUT" {
+		v = "update data in"
+	} else if method == "DELETE" {
+		v = "delete data from"
+	} else {
+		v = "???"
+	}
+
+	sentence := fmt.Sprintf("\n %s wants to %s %s with id %s \n", source, v, destinationName, destinationId)
+	util.PrintBold(sentence)
+	util.PrintItalic("Additional info: " + destinationInfo.(string))
+	return metadata != nil
+}
+
+// Parse the method/verb from the message
+func parseVerb(msg ipc.GenericData) string {
+	v := msg["metadata"].(map[string]interface{})["method"].(string)
+	if v == "" {
+		return "nil"
+	}
+	util.PrintSuccess("Verb: " + v)
+	return v
+}
+
 func parseData(msg *ipc.IPCMessage) ipc.GenericData {
 	var data ipc.GenericData
-	// var dataType ipc.DataType
 
 	switch msg.Datatype {
 	case ipc.DATA_TEXT:
-		// Parse the integer data
 		fmt.Println("Data is string")
 	case ipc.DATA_INT:
-		// Parse the JSON data
+		// Parse the integer data
+		// Might be a disconnect message
 		fmt.Println("Data is integer")
-		// data = ipc.JSONData(msg.Data)
+
 	case ipc.DATA_JSON:
-		// Parse the string data
+		// Parse the JSON data
 		fmt.Println("Data is json / generic data")
-		// json.Unmarshal(msg.Data, &data)
 
 		// var temp interface{}
 		err := json.Unmarshal(msg.Data, &data)
 		if err != nil {
 			fmt.Println("Error unmarshaling JSON data:", err)
 		} else {
-			// fmt.Println("Temporary data:", temp)
-			// data = temp.(map[string]interface{})
 			fmt.Printf("Data: %v\n", data)
 		}
+
+		handleGenericData(data)
 
 	case ipc.DATA_YAML:
 		// Parse the YAML data
@@ -274,13 +294,21 @@ func parseData(msg *ipc.IPCMessage) ipc.GenericData {
 		if err != nil {
 			fmt.Println("Error unmarshaling YAML data:", err)
 		}
+
+		handleGenericData(data)
+
 	case ipc.DATA_BIN:
 		// Parse the binary data
 		fmt.Println("Data is binary / generic data")
+
+		handleGenericData(data)
+
 	default:
 		// Default to generic data
 		fmt.Println("Data is generic")
 		gob.NewDecoder(bytes.NewReader(msg.Data)).Decode(&data)
+		handleGenericData(data)
+
 	}
 
 	if data == nil {
@@ -290,14 +318,8 @@ func parseData(msg *ipc.IPCMessage) ipc.GenericData {
 	return data
 }
 
-// Calculate the response time
-func responseTime(reqTime int64) {
-	currTime := util.UnixNanoTimestamp()
-	diff := currTime - reqTime
-	fmt.Printf("Response time: %d\n", diff)
-	fmt.Printf("Seconds: %f\n", float64(diff)/1e9)
-	fmt.Printf("Milliseconds: %f\n", float64(diff)/1e6)
-	fmt.Printf("Microseconds: %f\n", float64(diff)/1e3)
+func handleGenericData(data ipc.GenericData) {
+	// Handle the data
 }
 
 // handleConnection handles the incoming connection
@@ -324,6 +346,10 @@ func (s *IPCServer) handleConnection(c net.Conn) {
 		// Process the request...
 		util.PrintColorf(util.BgGreen, "Received: %+v\n", request)
 
+		if parseMetadata(d) {
+			fmt.Println("Method: ", parseVerb(d))
+		}
+
 		// Finally, respond to the client
 		err = s.respond(c, request)
 		if err != nil {
@@ -343,18 +369,31 @@ func (s *IPCServer) respond(c net.Conn, req ipc.IPCRequest) error {
 	}
 
 	util.PrintDebug("Responding to the client...")
-	moduleId := string(req.Header.Identifier[:])
+
+	// TODO: Check this part
+	moduleId := string(req.Header.Identifier[:]) // TODO: req.Header.Identifier is the server identifier, not the module identifier
+
 	var response *ipc.IPCRequest
 	var err error
-	if req.Checksum32 == int(crc(req.Message.Data)) {
-		// TODO: Refactor. Not very pretty. (the identifier key part)
-		response, err = NewIPCMessage(moduleId, ipc.MSG_ACK, []byte("OK"))
-	} else {
+
+	ok := req.Checksum32 == int(crc(req.Message.Data))
+
+	if !ok {
 		fmt.Printf("Request checksum: %v\nCalculated checksum: %v\n", req.Checksum32, crc(req.Message.Data))
 		response, err = NewIPCMessage(moduleId, ipc.MSG_ERROR, []byte("CHKSUM ERROR"))
-	}
-	if err != nil {
-		return err
+		if err != nil {
+			return err
+		}
+	} else {
+
+		// TODO: Refactor. Not very pretty. (the identifier key part)
+
+		// TODO: Implement different responses based on verbs/methods
+
+		response, err = NewIPCMessage(moduleId, ipc.MSG_ACK, []byte("OK"))
+		if err != nil {
+			return err
+		}
 	}
 
 	var responseBuffer bytes.Buffer
@@ -375,6 +414,7 @@ func (s *IPCServer) respond(c net.Conn, req ipc.IPCRequest) error {
 	return nil
 }
 
+// ReturnData is a struct that holds the metadata and the data
 type ReturnData struct {
 	Metadata ipc.Metadata `json:"metadata"`
 	Data     interface{}  `json:"data"`
@@ -391,6 +431,33 @@ func (d *ReturnData) GetLogs(path string, filter string) {
 	}
 
 	// Not sure if this fits here. Might rather implement it in the internal package
+}
+
+// Calculate the response time
+func responseTime(reqTime int64) {
+	currTime := util.UnixNanoTimestamp()
+	diff := currTime - reqTime
+	fmt.Printf("Response time: %d\n", diff)
+	fmt.Printf("Seconds: %f\n", float64(diff)/1e9)
+	fmt.Printf("Milliseconds: %f\n", float64(diff)/1e6)
+	fmt.Printf("Microseconds: %f\n", float64(diff)/1e3)
+}
+
+func NewIPCID(identifier string, id []byte) {
+	if len(id) > 4 {
+		util.PrintError("NewIPCID(): Identifier length must be 4 bytes")
+		util.PrintInfo("Truncating the identifier to 4 bytes")
+		id = id[:4]
+	}
+	ipc.SetIPCID(id)
+}
+
+func Cleanup() {
+	util.PrintItalic("\t... IPC server cleanup complete.")
+}
+
+func crc(b []byte) uint32 {
+	return crc32.ChecksumIEEE(b)
 }
 
 // TODO's: 1]
