@@ -1,27 +1,31 @@
 sources:
     - name: siem logs
       type: directory
-      location: /var/log/siem
+      description: "logs"
+      config: /var/log/siem
       format: json
       tags:
         - siem
         - logs
     - name: syslog
       type: service
-      location: ' '
+      description: "syslogs"
+      config: ' '
       format: json
       tags:
         - syslog
         - logs
     - name: threat intel
       type: module
-      location: ./modules/threat_intel/config.yaml
+      description: "Threat intel module. Provides functionality like IP reputation and IOCs."
+      config: ./modules/threat_intel/config.yaml
       tags:
         - intel
         - module
     - name: anomaly detection
       type: module
-      location: ./modules/anomaly_detection/config.yaml
+      description: "Anomaly detection module. Provides log analytics."
+      config: ./modules/anomaly_detection/config.yaml
       tags:
        - anomaly
        - detection

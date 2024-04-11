@@ -123,7 +123,3 @@ func (r *IPCRequest) Stringify() string {
 	c := fmt.Sprintf("CHECKSUM: %v\n", r.Checksum32)
 	return h + m + c
 }
-
-func SetIdentifier(name string, id [4]byte) {
-	IDENTIFIERS[name] = id
-}

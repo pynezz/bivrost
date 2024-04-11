@@ -10,14 +10,17 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+type Sources struct {
+	Name        string   `yaml:"name"`
+	Type        string   `yaml:"type"`
+	Description string   `yaml:"description"`
+	Config      string   `yaml:"config"`
+	Format      string   `yaml:"format,omitempty"`
+	Tags        []string `yaml:"tags"`
+}
+
 type Cfg struct {
-	Sources []struct {
-		Name     string   `yaml:"name"`
-		Type     string   `yaml:"type"`
-		Location string   `yaml:"location"`
-		Format   string   `yaml:"format, omitempty"`
-		Tags     []string `yaml:"tags"`
-	} `yaml:"sources"`
+	Sources []Sources `yaml:"sources"`
 	Network struct {
 		ReadTimeout  int `yaml:"read_timeout,omitempty"`
 		WriteTimeout int `yaml:"write_timeout,omitempty"`
@@ -33,6 +36,7 @@ func LoadConfig(path string) (*Cfg, error) {
 
 	// First, let's check if the file exists via the util function fs.GetFile
 	file, err := fsutil.GetFile(path)
+	util.PrintDebug(fmt.Sprintf("Loading configuration file: %s...", path))
 
 	// If the file does not exist, we should return an error
 	if err != nil {

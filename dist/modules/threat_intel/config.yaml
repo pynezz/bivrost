@@ -1,6 +1,12 @@
 ## threat_intel module configuration
-name:
-  Threat Intel
+###############################
+# THIS IS AN EXAMPLE CONFIG.  #
+# THE STRUCTURE IS CORRECT,   #
+# BUT THE VALUES ARE NOT SET  #
+###############################
+
+name: Threat Intel
+identifier: THRI
 database:
   path: ./thri_db.sqlite
 data_sources:

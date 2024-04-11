@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/pynezz/bivrost/internal/util"
@@ -14,6 +15,15 @@ import (
 func FileExists(filename string) bool {
 	_, err := os.Stat(filename)
 	return !os.IsNotExist(err)
+}
+
+func PathConvert(path string) string {
+	if runtime.GOOS == "windows" {
+		path = strings.Replace(path, "/", "\\", -1)
+	} else {
+		path = strings.Replace(path, "\\", "/", -1)
+	}
+	return path
 }
 
 // DirExists checks if a directory exists

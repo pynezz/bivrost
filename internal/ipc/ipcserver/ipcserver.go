@@ -16,6 +16,7 @@ import (
 	"github.com/pynezz/bivrost/internal/fsutil"
 	"github.com/pynezz/bivrost/internal/ipc"
 	"github.com/pynezz/bivrost/internal/util"
+	"github.com/pynezz/bivrost/modules"
 	"gopkg.in/yaml.v3"
 )
 
@@ -180,10 +181,12 @@ func crc(b []byte) uint32 {
 
 // Function to create a new IPCMessage based on the identifier key
 func NewIPCMessage(identifierKey string, messageType byte, data []byte) (*ipc.IPCRequest, error) {
-	identifier, ok := MODULEIDENTIFIERS[identifierKey]
-	if !ok {
-		return nil, fmt.Errorf("invalid identifier key: %s", identifierKey)
-	}
+	identifier := modules.Mids.GetModuleIdentifier(identifierKey)
+	util.PrintDebug("NewIPCMessage from module with key: " + identifierKey)
+	// identifier, ok := MODULEIDENTIFIERS[identifierKey]
+	// if !ok {
+	// 	return nil, fmt.Errorf("invalid identifier key: %s", identifierKey)
+	// }
 
 	var id [4]byte
 	copy(id[:], identifier[:4]) // Ensure no out of bounds panic
@@ -313,6 +316,8 @@ func (s *IPCServer) handleConnection(c net.Conn) {
 			util.PrintError("Error parsing request: " + err.Error())
 			break
 		}
+		util.PrintSuccess("Request received: " + string(request.Header.Identifier[:]))
+		fmt.Println(modules.Mids.GetModuleIdentifier(string(request.Header.Identifier[:]))) // What is this, Java? C++?
 
 		util.PrintDebug("Request parsed: " + strconv.Itoa(request.Checksum32))
 

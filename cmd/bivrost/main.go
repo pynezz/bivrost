@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"path"
 	"strconv"
 	"syscall"
 
@@ -20,6 +19,7 @@ import (
 	"github.com/pynezz/bivrost/internal/tui"
 	"github.com/pynezz/bivrost/internal/util"
 	"github.com/pynezz/bivrost/internal/util/flags"
+	"github.com/pynezz/bivrost/modules"
 )
 
 // 1. The main function is the entry point of the application.
@@ -64,6 +64,13 @@ func main() {
 	if err != nil {
 		fmt.Println(err)
 		fmt.Println("Exiting...")
+		return
+	}
+
+	err = modules.LoadModules(*cfg)
+	if err != nil {
+		util.PrintError("Failed to load modules: " + err.Error())
+		fmt.Println(err)
 		return
 	}
 
@@ -155,11 +162,12 @@ func testUDS() {
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 
 	// Ensuring that the correct temp path directory is used regardless of the operating system
-	tmpDir := os.TempDir()
-	bivrostTmpDir := path.Join(tmpDir, "bivrost")
-	socketPath := path.Join(bivrostTmpDir, "bivrost.sock")
+	// tmpDir := os.TempDir()
+	// bivrostTmpDir := path.Join(tmpDir, "bivrost")
+	// socketPath := path.Join(bivrostTmpDir, "bivrost.sock")
+	// socketPath = fsutil.PathConvert(socketPath)
 
-	util.PrintSuccess("New UNIX domain socket location: " + socketPath)
+	// util.PrintSuccess("New UNIX domain socket location: " + socketPath)
 	ipcServer := ipcserver.NewIPCServer("bivrost", "bivrost")
 	ok := ipcServer.InitServerSocket()
 	if !ok {

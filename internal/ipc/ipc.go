@@ -11,6 +11,7 @@ import (
 	"path"
 	"time"
 
+	"github.com/pynezz/bivrost/internal/fsutil"
 	"github.com/pynezz/bivrost/internal/util"
 )
 
@@ -44,17 +45,20 @@ func GetIPCStrID() string {
 	return string(IPCID)
 }
 
+func SetIdentifier(name string, id [4]byte) {
+	IDENTIFIERS[name] = id
+}
+
 func DefaultSock(name string) string {
 	tmpDir := os.TempDir()                     // Temporary directory (eg. /tmp)
 	subTmpDir := path.Join(tmpDir, name)       // Subdirectory in the temporary directory (eg. /tmp/<subTmpDir>)
 	sock := path.Join(subTmpDir, name+".sock") // Socket file path (eg. /tmp/<subTmpDir>/<name>)
-	sock = path.Clean(sock)                    // Clean the path
-
+	// sock = path.Clean(sock)                 // Clean the path
+	sock = fsutil.PathConvert(sock) // Convert the path to the correct format
 	return sock
 }
 
 func init() {
-
 	gob.Register(IPCRequest{})
 	gob.Register(IPCMessage{})
 	gob.Register(IPCHeader{})
