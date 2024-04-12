@@ -17,6 +17,9 @@ import (
 	"github.com/pynezz/bivrost/internal/fsutil"
 	"github.com/pynezz/bivrost/internal/ipc"
 	"github.com/pynezz/bivrost/internal/util"
+	"github.com/pynezz/bivrost/modules"
+
+	pclient "github.com/pynezz/pynezzentials/ipc/ipcclient"
 )
 
 type IPCClient struct {
@@ -73,9 +76,9 @@ func (c *IPCClient) Stringify() string {
 		util.PrintWarning("No description set for IPCClient")
 		c.Desc = "IPC testing client"
 	}
-	if c.Identifier == [4]byte{} {
+	if c.Identifier == [4]byte{} { // If the identifier is not set (ie. [0, 0, 0, 0])
 		util.PrintWarning("No identifier set for IPCClient")
-		c.Identifier = ipc.IDENTIFIERS["threat_intel"]
+		c.Identifier = ipc.IDENTIFIERS["module"]
 	}
 
 	stringified := fmt.Sprintln("IPCCLIENT")
@@ -102,21 +105,29 @@ func existHandler(exist bool) (bool, error) {
 	return false, nil
 }
 
-func (c *IPCClient) SetSocket(socketPath string) error {
-	if socketPath == "" {
-		socketPath = DefaultSocketPath()
-	}
-	c.Sock = socketPath
-
-	retry, err := existHandler(socketExists(socketPath))
-	if err != nil {
-		return err
-	}
-	if retry {
-		c.SetSocket(socketPath)
-	}
-	return err
+// If this isn't the most ugly function I've ever seen...
+func (c *IPCClient) SetSocket(serverid string) error {
+	modules.SetModuleIdentifier(c.Identifier, c.Name)
+	return func(name, id, sid, p string) error {
+		return pclient.NewIPCClient(name, string(c.Identifier[:]), sid).SetSocket(p)
+	}(c.Name, modules.GetModuleNameFromID(c.Identifier), serverid, c.Sock)
 }
+
+// func (c *IPCClient) SetSocket(socketPath string) error {
+// 	if socketPath == "" {
+// 		socketPath = DefaultSocketPath()
+// 	}
+// 	c.Sock = socketPath
+
+// 	retry, err := existHandler(socketExists(socketPath))
+// 	if err != nil {
+// 		return err
+// 	}
+// 	if retry {
+// 		c.SetSocket(socketPath)
+// 	}
+// 	return err
+// }
 
 // Get the default socket path (UNIX domain socket path, /tmp/bivrost/bivrost.sock)
 func DefaultSocketPath() string {
@@ -233,18 +244,18 @@ func (c *IPCClient) CreateReq(message string, t ipc.MsgType, dataType ipc.DataTy
 	util.PrintDebug("Created IPC checksum: " + strconv.Itoa(int(checksum)))
 
 	return &ipc.IPCRequest{
-		MessageSignature: ipc.IPCID,
+		MessageSignature: ipc.IPCID, // IPC Server ID
 		Header: ipc.IPCHeader{
-			Identifier:  c.Identifier,
-			MessageType: byte(t),
+			Identifier:  c.Identifier, // Identifier of the IPC client
+			MessageType: byte(t),      // Type of the message
 		},
 		Message: ipc.IPCMessage{
-			Datatype:   dataType,
-			Data:       []byte(message),
-			StringData: message,
+			Datatype:   dataType,        // Type of the data
+			Data:       []byte(message), // The actual data
+			StringData: message,         // String representation of the data
 		},
-		Timestamp:  util.UnixNanoTimestamp(),
-		Checksum32: int(checksum),
+		Timestamp:  util.UnixNanoTimestamp(), // Timestamp of the message
+		Checksum32: int(checksum),            // Checksum of the message byte data
 	}
 }
 

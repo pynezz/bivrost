@@ -10,7 +10,6 @@ import (
 	"io"
 	"net"
 	"os"
-	"strconv"
 	"strings"
 
 	"github.com/pynezz/bivrost/internal/fsutil"
@@ -205,18 +204,31 @@ func parseConnection(c net.Conn) (ipc.IPCRequest, error) {
 	return request, nil
 }
 
-func parseMetadata(msg ipc.GenericData) bool {
+// Parse the metadata from the message
+// Returns the source, destination, and a boolean indicating if the metadata is nil
+func parseMetadata(msg ipc.GenericData) (ipc.Metadata, bool) {
 
 	// TODO: Might be reasonable to implement the Metadata struct here (ipc.Metadata)
 	metadata := msg["metadata"]
 	if metadata == nil {
-		return false
+		return ipc.Metadata{}, false
 	}
-	source := metadata.(map[string]interface{})["source"]
+	source := metadata.(map[string]interface{})["source"].(string)
 	destination := metadata.(map[string]interface{})["destination"].(map[string]interface{})["destination"]
-	destinationId := destination.(map[string]interface{})["id"]
+	destinationId := destination.(map[string]interface{})["id"].(string)
 	destinationName := destination.(map[string]interface{})["name"]
 	destinationInfo := destination.(map[string]interface{})["info"]
+
+	m := ipc.Metadata{
+		Source: source,
+		Destination: ipc.Destination{
+			Object: ipc.Object{
+				Id:   destinationId,
+				Name: destinationName.(string),
+			},
+		},
+		Method: parseVerb(msg),
+	}
 
 	method := metadata.(map[string]interface{})["method"]
 
@@ -236,7 +248,8 @@ func parseMetadata(msg ipc.GenericData) bool {
 	sentence := fmt.Sprintf("\n %s wants to %s %s with id %s \n", source, v, destinationName, destinationId)
 	util.PrintBold(sentence)
 	util.PrintItalic("Additional info: " + destinationInfo.(string))
-	return metadata != nil
+
+	return m, metadata == nil
 }
 
 // Parse the method/verb from the message
@@ -328,16 +341,17 @@ func (s *IPCServer) handleConnection(c net.Conn) {
 			fmt.Println("Data is nil")
 		}
 
-		util.PrintSuccess("Request received: " + string(inboundRequest.Header.Identifier[:]))
 		modules.Mids.StoreModuleIdentifier(string(inboundRequest.Header.Identifier[:]), inboundRequest.Header.Identifier)
 		fmt.Println(modules.Mids.GetModuleIdentifier(string(inboundRequest.Header.Identifier[:]))) // Sorry about this
-		util.PrintDebug("Request parsed: " + strconv.Itoa(inboundRequest.Checksum32))
 
 		// Process the request...
 		util.PrintColorf(util.BgGreen, "Received: %+v\n", inboundRequest)
 
-		if parseMetadata(d) {
-			fmt.Println("Method: ", parseVerb(d))
+		mData, ok := parseMetadata(d)
+		if !ok {
+			util.PrintWarning("Metadata is nil")
+		} else {
+			util.PrintSuccess("Metadata: " + fmt.Sprintf("%v", mData))
 		}
 
 		// Finally, respond to the client

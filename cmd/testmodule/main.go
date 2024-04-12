@@ -23,8 +23,8 @@ func main() {
 		case "uds":
 			fmt.Println("Testing UNIX domain socket connection...")
 			// testUnixSocketIPC()
-			client := ipcclient.NewIPCClient()
-			err := client.Connect("bivrost") // Connect to the UNIX domain socket
+			client := ipcclient.NewIPCClient() // Create a new IPC client
+			err := client.Connect("bivrost")   // Connect to the UNIX domain socket
 			if err != nil {
 				fmt.Println(err)
 				return
