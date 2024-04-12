@@ -1,4 +1,4 @@
-package main
+package bivrost
 
 import (
 	"database/sql"
@@ -33,7 +33,7 @@ import (
 // 7. It initializes the Fiber server with the configuration values.
 // 8. It sets the port to 3000 if the configuration file does not specify a port.
 
-func main() {
+func Execute() {
 
 	// Setting up signal handling to catch CTRL+C and other termination signals
 	sigChan := make(chan os.Signal, 1)
