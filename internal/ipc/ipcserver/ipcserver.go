@@ -249,7 +249,7 @@ func parseMetadata(msg ipc.GenericData) (ipc.Metadata, bool) {
 	util.PrintBold(sentence)
 	util.PrintItalic("Additional info: " + destinationInfo.(string))
 
-	return m, metadata == nil
+	return m, metadata != nil
 }
 
 // Parse the method/verb from the message
