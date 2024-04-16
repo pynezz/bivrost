@@ -105,6 +105,48 @@ func existHandler(exist bool) (bool, error) {
 	return false, nil
 }
 
+// ClientListen listens for a message from the server and returns the data.
+// GenericData is a generic map for data (map[string]interface{}). It can be used to store any data type.
+func (c *IPCClient) ClientListen() ipc.IPCResponse {
+	var err error
+
+	response := ipc.IPCResponse{}
+
+	if c.conn == nil {
+		util.PrintError("Connection not established")
+		return response
+	}
+
+	res, err := parseConnection(c.conn)
+	if err != nil {
+		response.Success = false
+		if err.Error() == "EOF" {
+			util.PrintWarning("Client disconnected")
+			return response
+		}
+		util.PrintError("Error parsing the connection")
+		return response
+	}
+
+	response = ipc.IPCResponse{
+		Request:    res,
+		Success:    true,
+		Message:    res.Message.StringData,
+		Checksum32: res.Checksum32,
+	}
+
+	util.PrintSuccess("Received message from server: " + response.Message)
+
+	if string(res.Message.Data) == "OK" {
+		util.PrintColorf(util.LightCyan, "Message type: %v\n", res.Header.MessageType)
+		util.PrintSuccess("Checksums match")
+	} else {
+		util.PrintError("Checksums do not match")
+	}
+
+	return response
+}
+
 // If this isn't the most ugly function I've ever seen...
 func (c *IPCClient) SetSocket(serverid string) error {
 	modules.SetModuleIdentifier(c.Identifier, c.Name)

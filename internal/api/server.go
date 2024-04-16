@@ -69,6 +69,30 @@ func NewServer(cfg *config.Cfg) *fiber.App {
 	return app
 }
 
+// The antiphishingHandler function is a function that handles the antiphishing route.
+// Theoretical implementation is as follows:
+// 1. The user generates a hash based on their WebGL fingerprint + url
+// 2. The user sends the hash to the server along with the JWT token
+// 3. The server set the hash as the session key with the JWT token as the value
+// 4. The server sends the hash back to the user
+// 5. The user sends the hash to the server with every elevated request and at random intervals
+// 6. The server checks if the hash is in the session store
+// 7. If the hash is in the session store, the server allows the request
+// 8. If the hash is not in the session store, the server denies the request, alerts the user to reauthenticate, and logs the event
+func antiphishingHandler(c *fiber.Ctx) error {
+	h := c.Get("anti-phish") // Get the anti-phishing header
+	if h == "" {
+		return c.SendStatus(fiber.StatusUnauthorized)
+	}
+
+	// Check if the hash is in the session store
+	// middleware.DBInstance.Fetch(middleware.DBInstance.SelectColEq(sess))
+	// If it is, allow the request
+	// If it is not, deny the request
+
+	return c.SendStatus(fiber.StatusOK)
+}
+
 // setupRoutes configures all the routes for the API server.
 func setupRoutes(app *fiber.App, cfg *config.Cfg) {
 	app.Get("/", indexHandler)               // Root path
