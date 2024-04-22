@@ -209,6 +209,7 @@ func writeMigrationScripts() (string, error) {
 	migrationDir := filepath.Join(dir, "migrations")
 	userScriptFileName := "001_create_users_table.sql"
 	authTablesFileName := "002_create_auth_tables.sql"
+	logsDbFileName := "003_logs.sql"
 
 	userMigrationScriptContents := `CREATE TABLE users (
 UserID INTEGER PRIMARY KEY,
@@ -257,6 +258,26 @@ CREATE TABLE password_auth (
     FOREIGN KEY (UserID) REFERENCES users(UserID) ON DELETE CASCADE
 );`
 
+	logsDbScriptContents := `
+CREATE TABLE nginx_logs (
+    time_local TEXT NOT NULL,
+    remote_addr TEXT NOT NULL,
+    remote_user TEXT NOT NULL,
+    request TEXT NOT NULL,
+    status INTEGER NOT NULL,
+    body_bytes_sent INTEGER NOT NULL,
+    request_time REAL NOT NULL,
+    http_referrer TEXT,
+    http_user_agent TEXT,
+    request_body TEXT
+);
+CREATE INDEX idx_time_local ON nginx_logs (time_local);
+CREATE INDEX idx_remote_addr ON nginx_logs (remote_addr);
+CREATE INDEX idx_status ON nginx_logs (status);
+CREATE INDEX idx_request_time ON nginx_logs (request_time);
+CREATE INDEX idx_http_path ON nginx_logs (request);
+`
+
 	// Create the migration directory
 	if fsutil.DirExists(migrationDir) {
 		util.PrintWarning("Migration directory already exists: " + migrationDir)
@@ -269,6 +290,8 @@ CREATE TABLE password_auth (
 	}
 	// Create the files
 	util.PrintInfo("Temp directory created at: " + migrationDir)
+
+	// (i) Create the user migration script
 	tmpUserMig := filepath.Join(migrationDir, userScriptFileName)
 	util.PrintInfo("Creating file at location: " + tmpUserMig)
 	var response string
@@ -285,6 +308,7 @@ CREATE TABLE password_auth (
 	}
 	util.PrintInfo("Wrote user migration script to " + tmpUserMig)
 
+	// (i) Create the auth tables migration script
 	tmp := filepath.Join(migrationDir, authTablesFileName)
 	fmt.Println("Creating file at location: ", tmp)
 	util.PrintWarning("Do you want to create the auth tables migration script? (y/n) ")
@@ -300,6 +324,24 @@ CREATE TABLE password_auth (
 		return "", err
 	}
 	util.PrintInfo("Wrote auth tables migration script to " + tmp)
+
+	// (i) Create the logs database migration script
+	// ! Not sure if this works - not tested yet. Have just added the new migration script
+	// ! This is done in case the migration scripts are not found
+	tmpLogDb := filepath.Join(migrationDir, logsDbFileName)
+	fmt.Println("Creating file at location: ", tmp)
+	util.PrintWarning("Do you want to create the auth tables migration script? (y/n) ")
+	fmt.Scanln(&userAccept)
+	if userAccept != "y" {
+		return "", nil
+	}
+
+	err = os.WriteFile(tmpLogDb, []byte(logsDbScriptContents), 0644)
+	if err != nil {
+		fmt.Println("Error creating file: ", err)
+		return "", err
+	}
+	util.PrintInfo("Wrote auth tables migration script to " + tmpLogDb)
 
 	return migrationDir, nil
 }

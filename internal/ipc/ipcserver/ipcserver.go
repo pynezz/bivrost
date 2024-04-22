@@ -12,11 +12,13 @@ import (
 	"os"
 	"strings"
 
+	"gopkg.in/yaml.v3"
+
+	_ "github.com/pynezz/bivrost/internal/fetcher" // TODO: Implement @Daniel, @Patrik
 	"github.com/pynezz/bivrost/internal/fsutil"
 	"github.com/pynezz/bivrost/internal/ipc"
 	"github.com/pynezz/bivrost/internal/util"
 	"github.com/pynezz/bivrost/modules"
-	"gopkg.in/yaml.v3"
 )
 
 /* CONSTANTS
@@ -341,11 +343,21 @@ func (s *IPCServer) handleConnection(c net.Conn) {
 			fmt.Println("Data is nil")
 		}
 
-		modules.Mids.StoreModuleIdentifier(string(inboundRequest.Header.Identifier[:]), inboundRequest.Header.Identifier)
-		source := fmt.Sprint(modules.Mids.GetModuleIdentifier(string(inboundRequest.Header.Identifier[:]))) // Sorry about this (this should print the identifier of the module that sent the request)
+		moduleName := modules.Mids.GetModuleName(inboundRequest.Header.Identifier)
+		if moduleName == "" {
+			util.PrintColorf(util.LightRed, "[+] Added module name: %s", moduleName)
+			modules.Mids.StoreModuleIdentifier(string(inboundRequest.Header.Identifier[:]), inboundRequest.Header.Identifier)
+		} else {
+			util.PrintColorf(util.LightCyan, "Module name: %s", moduleName)
+		}
+
+		senderModule := modules.GetModule(moduleName)
+
+		source := fmt.Sprint(modules.Mids.GetModuleIdentifier(moduleName)) // Sorry about this (this should print the identifier of the module that sent the request)
 		fmt.Println("Source: " + source)
 
-		m := modules.Modules[string(inboundRequest.Header.Identifier[:])]
+		// m := modules.Modules[string(inboundRequest.Header.Identifier[:])]
+
 		// Process the request...
 		util.PrintColorf(util.BgGreen, "Received: %+v\n", inboundRequest)
 
@@ -358,17 +370,44 @@ func (s *IPCServer) handleConnection(c net.Conn) {
 
 			// If there is data to fetch, fetch it
 			if mData.Method == "GET" {
+
+				util.PrintBold("Got a GET request - fetching data...")
 				// Get the data source
 				// modules.ModuleConfig.DataSources[mData.Destination.Name].GetLogs("path", "filter")
-				sources := m.Config.DataSources
+
+				sources := senderModule.Config.DataSources
+				// sources := m.Config.DataSources // TODO: This does not work
+
+				if sources == nil { // If still nil
+					util.PrintError("Data sources are nil")
+				}
+
+				util.PrintSuccess("Data sources: " + fmt.Sprintf("%v", sources))
+
+				var found bool
+				found = false
 
 				// Find the module config for the module that sent the request
 				for _, source := range sources { // Loop through the modules
 					if source.Name == mData.Source { // Find the module in the stored module configs
 						// Get the source path and filter
 						// path := source.Location  // TODO: Implement this
-
+						util.PrintBold("Found source: " + source.Name)
+						found = true
 					}
+				}
+
+				if !found {
+					util.PrintError("Source not found")
+
+					// Respond with an error
+
+				} else {
+					// Get the logs
+					// mData.GetLogs(path, filter)
+
+					// Respond with the data
+					util.PrintSuccess("Data fetched successfully")
 				}
 			}
 		}
@@ -382,6 +421,10 @@ func (s *IPCServer) handleConnection(c net.Conn) {
 			break
 		}
 	}
+}
+
+func getResource(mc *modules.ModuleConfig) string {
+	return mc.Database.Path
 }
 
 // c is the connection to the client

@@ -109,6 +109,10 @@ func (i *ModuleIdentifiers) GetModuleName(identifier [4]byte) string {
 	return ""
 }
 
+func GetModule(name string) Module {
+	return Modules[name]
+}
+
 // GetModuleNames returns the names of the modules
 func (i *ModuleIdentifiers) GetModuleNames() []string {
 	var names []string

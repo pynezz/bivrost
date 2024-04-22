@@ -13,6 +13,7 @@ import (
 
 	"github.com/pynezz/bivrost/internal/api"
 	"github.com/pynezz/bivrost/internal/config"
+	"github.com/pynezz/bivrost/internal/fetcher"
 	"github.com/pynezz/bivrost/internal/fsutil"
 	"github.com/pynezz/bivrost/internal/ipc/ipcserver"
 	"github.com/pynezz/bivrost/internal/middleware"
@@ -55,6 +56,13 @@ func Execute() {
 		flag.Usage()
 		return
 	}
+
+	nginxDB, err := fetcher.ReadDB("logs")
+	if err != nil {
+		util.PrintError("Failed to read the database: " + err.Error())
+		return
+	}
+	defer nginxDB.Close()
 
 	// Parse the command line arguments (flags)
 	flags.ParseFlags()
