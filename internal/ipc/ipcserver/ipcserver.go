@@ -342,17 +342,38 @@ func (s *IPCServer) handleConnection(c net.Conn) {
 		}
 
 		modules.Mids.StoreModuleIdentifier(string(inboundRequest.Header.Identifier[:]), inboundRequest.Header.Identifier)
-		fmt.Println(modules.Mids.GetModuleIdentifier(string(inboundRequest.Header.Identifier[:]))) // Sorry about this
+		source := fmt.Sprint(modules.Mids.GetModuleIdentifier(string(inboundRequest.Header.Identifier[:]))) // Sorry about this (this should print the identifier of the module that sent the request)
+		fmt.Println("Source: " + source)
 
+		m := modules.Modules[string(inboundRequest.Header.Identifier[:])]
 		// Process the request...
 		util.PrintColorf(util.BgGreen, "Received: %+v\n", inboundRequest)
 
+		// Parse metadata
 		mData, ok := parseMetadata(d)
 		if !ok {
 			util.PrintWarning("Metadata is nil")
 		} else {
 			util.PrintSuccess("Metadata: " + fmt.Sprintf("%v", mData))
+
+			// If there is data to fetch, fetch it
+			if mData.Method == "GET" {
+				// Get the data source
+				// modules.ModuleConfig.DataSources[mData.Destination.Name].GetLogs("path", "filter")
+				sources := m.Config.DataSources
+
+				// Find the module config for the module that sent the request
+				for _, source := range sources { // Loop through the modules
+					if source.Name == mData.Source { // Find the module in the stored module configs
+						// Get the source path and filter
+						// path := source.Location  // TODO: Implement this
+
+					}
+				}
+			}
 		}
+
+		// dest := mData.Source
 
 		// Finally, respond to the client
 		err = s.respond(c, inboundRequest)

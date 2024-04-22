@@ -24,7 +24,7 @@ func StartModule() {
 	// Start the module with the provided configuration
 }
 
-var Modules map[string][]Module
+var Modules map[string]Module
 
 var Mids ModuleIdentifiers
 
@@ -34,7 +34,7 @@ func LoadModules(config config.Cfg) error {
 	if Modules != nil {
 		return fmt.Errorf("modules already loaded")
 	}
-	Modules = make(map[string][]Module)
+	Modules = make(map[string]Module)
 
 	var m ModuleIdentifiers = make(map[string][4]byte)
 	Mids = m
@@ -74,7 +74,7 @@ func LoadModules(config config.Cfg) error {
 		}
 
 		module.Config = &mc
-		Modules[module.Name] = append(Modules[module.Name], module)
+		Modules[module.Name] = module
 		util.PrintSuccess("Loaded module " + module.Name)
 
 		id := [4]byte{}
@@ -84,6 +84,7 @@ func LoadModules(config config.Cfg) error {
 		Mids[module.Name] = id
 		util.PrintSuccess("Loaded identifier for " + module.Name + " as " + fmt.Sprintf("%v", id))
 		Mids.StoreModuleIdentifier(module.Name, id)
+
 	}
 	return nil
 }
