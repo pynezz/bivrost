@@ -60,47 +60,104 @@ func ReadDB(database string) (*sql.DB, error) {
 		return nil, fmt.Errorf("database not found")
 	}
 
-	db, err := sql.Open("sqlite3", database)
+	db, err := sql.Open("sqlite3", database+".db")
 	if err != nil {
 		return nil, err
 	}
 
+	// formatString := "\033[H\033[K%s\033[0\033[1F\033[K"
+
 	nginxlogRepository := NewSQLiteLogs(db)
+	if err := nginxlogRepository.Migrate(); err != nil {
+		return nil, err
+	}
 
 	testIP := "91.90.40.176"
 
-	readLogs, err := nginxlogRepository.GetByIP(testIP)
+	// if readLogs, err := nginxlogRepository.GetByIP(testIP); err != nil {
+	// 	util.PrintError("error fetching log by IP: " + err.Error())
+	// } else if len(readLogs.Logs) > 0 {
+	// 	util.PrintSuccess("Logs fetched by IP:" + fmt.Sprintf("%d", len(readLogs.Logs)))
+	// 	for _, log := range readLogs.Logs {
+	// 		util.PrintSuccess("Log ID: " + fmt.Sprintf("%d", log.ID) + "\nLog timestamp: " + log.TimeLocal)
+	// 	}
+	// } else {
+	// 	util.PrintError("No logs found for IP: " + testIP)
+	// }
+
+	util.ItalicF("Creating a new log for IP: " + testIP)
+
+	// go func() {
+	// 	for {
+	// 		output := fmt.Sprintf(formatString, fmt.Sprintf("Open connections: %d\n", db.Stats().OpenConnections))
+	// 		util.PrintColorAndBgBold(util.Cyan, util.BgGray, output)
+	// 	}
+	// }()¨
+	timestamp := util.UnixNanoTimestamp()
+	var finalTime int64
+
+	logentries, err := os.Open("nginx_logentries_10k.log")
 	if err != nil {
-		util.PrintError("error fetching log by IP: " + err.Error())
+		return nil, err
 	}
-	if len(readLogs.Logs) > 0 {
-		util.PrintSuccess("Logs fetched by IP:" + string(len(readLogs.Logs)))
-		for _, log := range readLogs.Logs {
-			util.PrintSuccess("Log ID: " + string(log.ID) + "\nLog timestamp: " + log.TimeLocal)
+	defer logentries.Close()
+
+	scanner := bufio.NewScanner(logentries)
+	for scanner.Scan() {
+		log, err := parseNginxLog(scanner.Text())
+		if err != nil {
+			if err.Error() == "log is an environment variable" {
+				continue
+			} else {
+				return nil, err
+			}
 		}
-	} else {
-		util.PrintError("No logs found for IP: " + testIP)
+
+		_, err = nginxlogRepository.Create(log)
+		if err != nil {
+			return nil, err
+		}
 	}
+	finalTime = util.UnixNanoTimestamp()
+	elapsed := finalTime - timestamp
+	util.PrintSuccess(fmt.Sprintf("Created 10k logs\n > %d µsec", elapsed/1000))
+	util.PrintSuccess(fmt.Sprintf(" > %d msec", elapsed/1000000))
+	util.PrintSuccess(fmt.Sprintf(" > %d sec", elapsed/1000000000))
+	util.PrintSuccess(fmt.Sprintf(" > %d min", elapsed/1000000000/60))
+
+	return db, nil
 
 	// Let's create a new log
 	log1, err := parseNginxLog(nginx_log_test_001)
 	if err != nil {
 		return nil, err
 	}
+	createdLog1, err := nginxlogRepository.Create(log1)
+	if err != nil {
+		return nil, err
+	}
+	util.PrintSuccess("Created log with ID: " + fmt.Sprintf("%d", createdLog1.ID))
 
 	log2, err := parseNginxLog(nginx_log_test_002)
 	if err != nil {
 		return nil, err
 	}
+	createdLog2, err := nginxlogRepository.Create(log2)
+	if err != nil {
+		return nil, err
+	}
+	util.PrintSuccess("Created log with ID: " + fmt.Sprintf("%d", createdLog2.ID))
 
 	log3, err := parseNginxLog(nginx_log_test_003)
 	if err != nil {
 		return nil, err
 	}
+	createdLog3, err := nginxlogRepository.Create(log3)
+	if err != nil {
+		return nil, err
+	}
 
-	nginxlogRepository.Create(log1)
-	nginxlogRepository.Create(log2)
-	nginxlogRepository.Create(log3)
+	util.PrintSuccess("Created log with ID: " + fmt.Sprintf("%d", createdLog3.ID))
 
 	return db, nil
 }
@@ -125,8 +182,11 @@ func parseNginxLog(log string) (NginxLog, error) { // Returning a copy for perfo
 	// Remove the enclosing curly braces from the log
 	// log = strings.TrimPrefix(log, "{")
 	// log = strings.TrimSuffix(log, "}")
+	if log[:7] == "ENV GET" {
+		return NginxLog{}, fmt.Errorf("log is an environment variable")
+	}
 
-	print("Log to parse: " + log + "\n")
+	// print("Log to parse: " + log + "\n")
 
 	var nginxLog NginxLog
 	err := json.NewDecoder(strings.NewReader(log)).Decode(&nginxLog)
