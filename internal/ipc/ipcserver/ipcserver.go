@@ -392,6 +392,16 @@ func (s *IPCServer) handleConnection(c net.Conn) {
 					if source.Name == mData.Source { // Find the module in the stored module configs
 						// Get the source path and filter
 						// path := source.Location  // TODO: Implement this
+						// db, err := fetcher.ReadDB("logs") // TODO: Implement this
+						// if err != nil {
+						// 	util.PrintError("Failed to read the database: " + err.Error())
+						// }
+
+						// // logs, err := db.GetByIP("192.168.0.1")
+						// if err != nil {
+						// 	util.PrintError("Failed to get logs: " + err.Error())
+						// }
+
 						util.PrintBold("Found source: " + source.Name)
 						found = true
 					}

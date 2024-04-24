@@ -26,10 +26,50 @@ type SQLiteLogsRepository struct {
 	db *sql.DB
 }
 
+// Generic repository interface implementation (from nginxlogs.go)
+type SQLiteRepository[T any] struct {
+	db     *sql.DB
+	table  string
+	fields []string
+}
+
+func NewSQLiteRepository[T any](db *sql.DB, table string, fields []string) *SQLiteRepository[T] {
+	return &SQLiteRepository[T]{
+		db:     db,
+		table:  table,
+		fields: fields,
+	}
+}
+
 func NewSQLiteLogs(db *sql.DB) *SQLiteLogsRepository {
 	return &SQLiteLogsRepository{
 		db: db,
 	}
+}
+
+func (r *SQLiteRepository[T]) Create(entry T) (*T, error) {
+
+	return nil, nil
+}
+
+func (r *SQLiteRepository[T]) All() ([]T, error) {
+
+	return nil, nil
+}
+
+func (r *SQLiteRepository[T]) GetByID(id int64) (*T, error) {
+
+	return nil, nil
+}
+
+func (r *SQLiteRepository[T]) Update(id int64, updated T) (*T, error) {
+
+	return nil, nil
+}
+
+func (r *SQLiteRepository[T]) Delete(id int64) error {
+
+	return nil
 }
 
 func (r *SQLiteLogsRepository) Migrate() error {
@@ -124,6 +164,50 @@ CREATE INDEX IF NOT EXISTS idx_http_path ON nginx_logs (request);
 	return err
 }
 
+// func (n *NginxLogRepository) Create(log NginxLog) (*NginxLog, error) {
+// 	res, err := n.db.Exec(
+// 		`INSERT INTO nginx_logs (
+// 			time_local, remote_addr, remote_user, request, status, body_bytes_sent, request_time, http_referrer, http_user_agent, request_body
+// 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+// 		log.TimeLocal, log.RemoteAddr, log.RemoteUser,
+// 		log.Request, log.Status, log.BodyBytesSent,
+// 		log.RequestTime, log.HttpReferer,
+// 		log.HttpUserAgent, log.RequestBody,
+// 	)
+
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	id, err := res.LastInsertId()
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	log.ID = id
+
+// 	return &log, nil
+// }
+
+// func (r *ThreatTypeRepository) Create(log ThreatTypeLog, table string) (*ThreatTypeLog, error) {
+// 	query := fmt.Sprintf("INSERT INTO %s (source, description, time_local, user_agent, payload) VALUES (?, ?, ?, ?, ?)", table)
+// 	res, err := r.db.Exec(query, log.Source, log.Description, log.TimeLocal, log.UserAgent, log.Payload)
+
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	id, err := res.LastInsertId()
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	log.ID = id
+
+// 	return &log, nil
+
+// }
+
 func (r *SQLiteLogsRepository) Create(log NginxLog) (*NginxLog, error) {
 	res, err := r.db.Exec(
 		`INSERT INTO nginx_logs (
@@ -147,7 +231,6 @@ func (r *SQLiteLogsRepository) Create(log NginxLog) (*NginxLog, error) {
 	log.ID = id
 
 	return &log, nil
-
 }
 
 func (r *SQLiteLogsRepository) All() (*NginxLogsList, error) {

@@ -15,6 +15,7 @@ import (
 	"github.com/pynezz/bivrost/internal/config"
 	"github.com/pynezz/bivrost/internal/fetcher"
 	"github.com/pynezz/bivrost/internal/fsutil"
+	"github.com/pynezz/bivrost/internal/fswatcher"
 	"github.com/pynezz/bivrost/internal/ipc/ipcserver"
 	"github.com/pynezz/bivrost/internal/middleware"
 	"github.com/pynezz/bivrost/internal/tui"
@@ -56,6 +57,10 @@ func Execute() {
 		flag.Usage()
 		return
 	}
+
+	go func() {
+		fswatcher.Watch("./access.log")
+	}()
 
 	nginxDB, err := fetcher.ReadDB("logs")
 	if err != nil {
