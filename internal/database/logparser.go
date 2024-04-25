@@ -5,11 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/pynezz/bivrost/internal/database/models"
 )
 
-func ReadNginxLogs(scanner *bufio.Scanner, lines chan<- string) {
+func ReadNginxLogs(scanner *bufio.Scanner, lines chan<- string, wg *sync.WaitGroup) {
 	readLines := 0
 	fmt.Print("Read lines: ")
 	for scanner.Scan() {
@@ -43,7 +44,7 @@ func ParseNginxLog(log string) (models.NginxLog, error) { // Returning a copy fo
 }
 
 // ParseBufferedNginxLog parses a channel of log lines and sends the parsed logs to another channel
-func ParseBufferedNginxLog(lines <-chan string, logs chan<- models.NginxLog) {
+func ParseBufferedNginxLog(lines <-chan string, logs chan<- models.NginxLog, wg *sync.WaitGroup) {
 	count := 0
 	for line := range lines {
 		log, err := ParseNginxLog(line)
@@ -56,5 +57,6 @@ func ParseBufferedNginxLog(lines <-chan string, logs chan<- models.NginxLog) {
 	}
 	fmt.Print("Total logs parsed:")
 	fmt.Printf("\r%d\n", count)
+	// wg.Done()
 	close(logs)
 }

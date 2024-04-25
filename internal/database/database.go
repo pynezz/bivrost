@@ -101,11 +101,16 @@ func (s *DataStore[T]) InsertLog(log T) error {
 }
 
 func (s *DataStore[T]) InsertBulk(buffer <-chan T) error {
+	count := 0
 	for log := range buffer {
 		if err := s.InsertLog(log); err != nil {
+			fmt.Println("Failed to insert log:", err)
 			return err
 		}
+		count++
 	}
+	fmt.Print("\t\t\t\t\tTotal logs inserted: ")
+	fmt.Printf("\r%d\n", count)
 	util.PrintColor(util.LightGreen, "InsertBulk() done.")
 	return nil
 }

@@ -68,7 +68,8 @@ func Execute() {
 
 	// nginxDB, err := fetcher.ReadDB("logs")
 	gormConf := gorm.Config{}
-	modulesData, err := database.InitDB("logs", gormConf, &models.SynTraffic{},
+	modulesData, err := database.InitDB("logs", gormConf, &models.NginxLog{},
+		&models.SynTraffic{},
 		&models.AttackType{},
 		&models.IndicatorsLog{},
 		&models.GeoLocationData{},
@@ -77,8 +78,8 @@ func Execute() {
 		fmt.Println(err)
 	}
 
-	lineChan := make(chan string, 10000)         // Buffer of 10000 lines
-	logChan := make(chan models.NginxLog, 10000) // Buffer of 10000 logs
+	lineChan := make(chan string, 1000)         // Buffer of 1000 lines
+	logChan := make(chan models.NginxLog, 1000) // Buffer of 1000 logs
 
 	util.PrintBold("Testing module data store connection...")
 	synTrafficRepo, _ := database.NewDataStore[models.SynTraffic](modulesData)
@@ -103,14 +104,13 @@ func Execute() {
 		return
 	}
 	defer file.Close()
-
+	var wg sync.WaitGroup
 	util.PrintInfo("Reading 10k logs from the file...")
-	go database.ReadNginxLogs(scanner, lineChan)
+	go database.ReadNginxLogs(scanner, lineChan, &wg)
 
 	util.PrintInfo("Parsing the logs...")
-	go database.ParseBufferedNginxLog(lineChan, logChan)
+	go database.ParseBufferedNginxLog(lineChan, logChan, &wg)
 
-	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
