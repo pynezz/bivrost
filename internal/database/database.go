@@ -8,9 +8,10 @@ package database
 */
 
 import (
+	"errors"
 	"fmt"
 
-	"github.com/pynezz/bivrost/internal/fetcher"
+	"github.com/pynezz/bivrost/internal/database/models"
 	"github.com/pynezz/bivrost/internal/util"
 	"gorm.io/driver/sqlite" // Sqlite driver based on CGO
 	"gorm.io/gorm"
@@ -24,24 +25,35 @@ const (
 	nginx_log_test_003 = `{"time_local":"22/Apr/2024:13:39:49 +0000","remote_addr":"91.90.40.176","remote_user":"","request":"POST /login HTTP/1.1","status": "302","body_bytes_sent":"0","request_time":"0.010","http_referrer":"http://164.92.132.240/","http_user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36","request_body":"username=admin&password=password_1234"}`
 )
 
+var (
+	EnvironError = errors.New("log is an environment variable")
+)
+
 func Testrun() {
 	util.PrintColorBold(util.DarkGreen, "Testing module data store connection...")
 	dbConf := gorm.Config{} // No config for now
-	db, err := NewDataStore[fetcher.NginxLog](fetcher.LogsDB, dbConf)
+	db, err := InitDB("logs", dbConf)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	nginxLogDB, err := NewDataStore[models.NginxLog](db)
 	if err != nil {
 		fmt.Println(err)
 	}
 
 	// Insert a log
-	log, err := fetcher.ParseNginxLog(nginx_log_test_001)
+	log, err := ParseNginxLog(nginx_log_test_001)
 	if err != nil {
-		fmt.Println(err)
+		if err != EnvironError {
+			fmt.Println(err)
+		}
+		util.PrintWarning("Log is an environment variable.")
 	}
 
-	if err := db.InsertLog(log); err != nil {
+	if err := nginxLogDB.InsertLog(log); err != nil {
 		fmt.Println(err)
 	}
-
 }
 
 // Generic repository implementation
@@ -49,8 +61,7 @@ type DataStore[T any] struct {
 	db *gorm.DB
 }
 
-// Initialize DB and automigrate given model
-func NewDataStore[T any](database string, conf gorm.Config) (*DataStore[T], error) {
+func InitDB(database string, conf gorm.Config, tables ...interface{}) (*gorm.DB, error) {
 	if database == "" {
 		return nil, fmt.Errorf("database name is required")
 	}
@@ -59,6 +70,16 @@ func NewDataStore[T any](database string, conf gorm.Config) (*DataStore[T], erro
 	if err != nil {
 		return nil, err
 	}
+
+	if err := db.AutoMigrate(tables...); err != nil {
+		return nil, err
+	}
+
+	return db, nil
+}
+
+// Initialize DB and automigrate given model
+func NewDataStore[T any](db *gorm.DB) (*DataStore[T], error) {
 
 	store := &DataStore[T]{db: db}
 	if err := db.AutoMigrate(); err != nil {
@@ -77,6 +98,16 @@ func (s *DataStore[T]) AutoMigrate() error {
 func (s *DataStore[T]) InsertLog(log T) error {
 	result := s.db.Create(&log)
 	return result.Error
+}
+
+func (s *DataStore[T]) InsertBulk(buffer <-chan T) error {
+	for log := range buffer {
+		if err := s.InsertLog(log); err != nil {
+			return err
+		}
+	}
+	util.PrintColor(util.LightGreen, "InsertBulk() done.")
+	return nil
 }
 
 // GetAllLogs returns all logs from the database

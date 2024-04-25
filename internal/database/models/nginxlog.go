@@ -1,10 +1,6 @@
-package fetcher
+package models
 
-import (
-	"gorm.io/gorm"
-)
-
-// More info: https://gosamples.dev/sqlite-intro/
+import "gorm.io/gorm"
 
 type NginxLog struct {
 	gorm.Model // Includes fields ID, CreatedAt, UpdatedAt, DeletedAt
@@ -20,17 +16,4 @@ type NginxLog struct {
 	HttpReferer   string `json:"http_referrer"`
 	HttpUserAgent string `json:"http_user_agent"`
 	RequestBody   string `json:"request_body"`
-}
-
-type NginxLogsList struct {
-	Logs []NginxLog
-}
-
-type NginxLogsRepository interface {
-	Migrate() error
-	Create(log NginxLog) (*NginxLog, error)
-	All() ([]NginxLog, error)
-	GetByIP(name string) (*NginxLog, error)
-	Update(id int64, updated NginxLog) (*NginxLog, error)
-	Delete(id int64) error
 }

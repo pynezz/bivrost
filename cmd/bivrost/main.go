@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"sync"
 	"syscall"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -15,7 +16,6 @@ import (
 	"github.com/pynezz/bivrost/internal/api"
 	"github.com/pynezz/bivrost/internal/config"
 	"github.com/pynezz/bivrost/internal/database"
-	"github.com/pynezz/bivrost/internal/fetcher"
 	"github.com/pynezz/bivrost/internal/fsutil"
 	"github.com/pynezz/bivrost/internal/fswatcher"
 	"github.com/pynezz/bivrost/internal/ipc/ipcserver"
@@ -24,6 +24,8 @@ import (
 	"github.com/pynezz/bivrost/internal/util"
 	"github.com/pynezz/bivrost/internal/util/flags"
 	"github.com/pynezz/bivrost/modules"
+
+	"github.com/pynezz/bivrost/internal/database/models"
 )
 
 // 1. The main function is the entry point of the application.
@@ -66,27 +68,93 @@ func Execute() {
 
 	// nginxDB, err := fetcher.ReadDB("logs")
 	gormConf := gorm.Config{}
-	nginxDB, err := database.NewDataStore[fetcher.NginxLog]("logs", gormConf)
+	modulesData, err := database.InitDB("logs", gormConf, &models.SynTraffic{},
+		&models.AttackType{},
+		&models.IndicatorsLog{},
+		&models.GeoLocationData{},
+		&models.GeoData{})
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	lineChan := make(chan string, 10000)         // Buffer of 10000 lines
+	logChan := make(chan models.NginxLog, 10000) // Buffer of 10000 logs
+
+	util.PrintBold("Testing module data store connection...")
+	synTrafficRepo, _ := database.NewDataStore[models.SynTraffic](modulesData)
+	attackTypeRepo, _ := database.NewDataStore[models.AttackType](modulesData)
+	indicatorsLogRepo, _ := database.NewDataStore[models.IndicatorsLog](modulesData)
+	geoLocationDataRepo, _ := database.NewDataStore[models.GeoLocationData](modulesData)
+	geoDataRepo, _ := database.NewDataStore[models.GeoData](modulesData)
+
+	fmt.Println(synTrafficRepo, attackTypeRepo, indicatorsLogRepo, geoLocationDataRepo, geoDataRepo)
+
+	nginxLogStore, err := database.NewDataStore[models.NginxLog](modulesData)
 	if err != nil {
 		util.PrintError("Failed to read the database: " + err.Error())
 		return
 	}
-
-	nginxDB.AutoMigrate()
-	nginxDB.TestWrite("10k")
-	nginx_log_test_001 := `{"time_local":"22/Apr/2024:17:56:07 +0000","remote_addr":"43.163.232.152","remote_user":"","request":"GET /viwwwsogou?op=8&query=%E7%A8%8F%E5%BB%BA%09%E9%BE%90%E1%B7%A2 HTTP/1.1","status": "400","body_bytes_sent":"248","request_time":"0.000","http_referrer":"","http_user_agent":"Mozilla/5.0 (Windows NT 6.1; Trident/7.0; rv:11.0) like Gecko","request_body":"gorm test"}`
-
-	parsedLog, err := fetcher.ParseNginxLog(nginx_log_test_001)
+	timestamp := util.UnixNanoTimestamp()
+	var finalTime int64
+	// nginxLogStore.AutoMigrate()
+	scanner, file, err := nginxLogStore.NewTestWriter("10k")
 	if err != nil {
-		if err != fetcher.EnvironError {
-			util.PrintError("Failed to parse the log: " + err.Error())
-		}
-		util.PrintWarning("Log is an environment variable.")
+		util.PrintError("Failed to open the log file: " + err.Error())
+		return
 	}
+	defer file.Close()
 
-	nginxDB.InsertLog(parsedLog)
-	util.PrintSuccess("Log inserted successfully.")
+	util.PrintInfo("Reading 10k logs from the file...")
+	go database.ReadNginxLogs(scanner, lineChan)
+
+	util.PrintInfo("Parsing the logs...")
+	go database.ParseBufferedNginxLog(lineChan, logChan)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		util.PrintInfo("Inserting logs into the database...")
+		nginxLogStore.InsertBulk(logChan)
+	}()
+	util.PrintInfo("Waiting for the inserts to complete...")
+	wg.Wait() // Wait for all inserts to complete
+	// close(logChan)
+
+	finalTime = util.UnixNanoTimestamp()
+	elapsed := finalTime - timestamp
+	util.PrintSuccess(fmt.Sprintf("Created 10k logs\n > %d µsec", elapsed/1000))
+	util.PrintSuccess(fmt.Sprintf(" > %d msec", elapsed/1000000))
+	util.PrintSuccess(fmt.Sprintf(" > %d sec", elapsed/1000000000))
+	util.PrintSuccess(fmt.Sprintf(" > %d min", elapsed/1000000000/60))
+
+	// for scanner.Scan() {
+	// 	log, err := database.ParseNginxLog(scanner.Text())
+	// 	if err != nil {
+	// 		if err.Error() == "log is an environment variable" {
+	// 			continue
+	// 		} else {
+	// 			fmt.Errorf("Failed to parse the log: %s", err.Error())
+	// 		}
+	// 	}
+
+	// 	if err := nginxLogStore.InsertLog(log); err != nil {
+	// 		fmt.Errorf("Failed to insert log: %s", err.Error())
+	// 	}
+	// }
+	// nginx_log_test_001 := `{"time_local":"22/Apr/2024:17:56:07 +0000","remote_addr":"43.163.232.152","remote_user":"","request":"GET /viwwwsogou?op=8&query=%E7%A8%8F%E5%BB%BA%09%E9%BE%90%E1%B7%A2 HTTP/1.1","status": "400","body_bytes_sent":"248","request_time":"0.000","http_referrer":"","http_user_agent":"Mozilla/5.0 (Windows NT 6.1; Trident/7.0; rv:11.0) like Gecko","request_body":"gorm test"}`
+
+	// parsedLog, err := fetcher.ParseNginxLog(nginx_log_test_001)
+	// if err != nil {
+	// 	if err != fetcher.EnvironError {
+	// 		util.PrintError("Failed to parse the log: " + err.Error())
+	// 	}
+	// 	util.PrintWarning("Log is an environment variable.")
+	// }
+
+	// nginxDB.InsertLog(parsedLog)
 	// defer nginxDB.Close()
+	// util.PrintSuccess("Log inserted successfully.")
 
 	// resultsDB, err := sql.Open("sqlite3", fetcher.ResultsDB)
 	// if err != nil {

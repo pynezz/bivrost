@@ -4,7 +4,6 @@ package fetcher
 
 import (
 	"bufio"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -50,35 +49,35 @@ func AttackTypeLogRepo() *SQLiteRepository[AttackTypeLog] {
 }
 
 func InitRepos(db *sql.DB) {
-	// NginxLog repository
-	nginxLogFields := []string{"time_local", "remote_addr", "remote_user", "request", "status", "body_bytes_sent", "request_time", "http_referrer", "http_user_agent", "request_body"}
-	nginxLogRepo := NewSQLiteRepository[NginxLog](db, "nginx_logs", nginxLogFields)
+	// // NginxLog repository
+	// nginxLogFields := []string{"time_local", "remote_addr", "remote_user", "request", "status", "body_bytes_sent", "request_time", "http_referrer", "http_user_agent", "request_body"}
+	// nginxLogRepo := NewSQLiteRepository[NginxLog](db, "nginx_logs", nginxLogFields)
 
-	log, err := ParseNginxLog(nginx_log_test_001)
-	if err != nil {
-		util.PrintError("Failed to parse log: " + err.Error())
-	}
+	// log, err := database.ParseNginxLog(nginx_log_test_001)
+	// if err != nil {
+	// 	util.PrintError("Failed to parse log: " + err.Error())
+	// }
 
-	if err := nginxLogRepo.Create([]NginxLog{log}, &log.ID); err != nil {
-		util.PrintError("Failed to create log: " + err.Error())
-	}
+	// if err := nginxLogRepo.Create([]NginxLog{log}, &log.ID); err != nil {
+	// 	util.PrintError("Failed to create log: " + err.Error())
+	// }
 
-	synTrafficFields := []string{"description", "source", "first_timestamp", "last_timestamp", "count", "status", "recommendation"}
-	synTrafficLogRepo := NewSQLiteRepository[SynTrafficDetectionLog](db, "syn_traffic_logs", synTrafficFields)
-	entry := &SynTrafficDetectionLog{
-		Description:    "SYN flood detected",
-		Source:         "192.168.0.1",
-		FirstTimestamp: "2024-04-22 17:56:07",
-		LastTimestamp:  "2024-04-22 17:56:07",
-		Count:          1,
-		Status:         "active",
-		Recommendation: "Block the IP address",
-	}
-	synTrafficLogRepo.Create(entry, entry.Description, entry.Source, entry.FirstTimestamp, entry.LastTimestamp, entry.Count, entry.Status, entry.Recommendation)
-	// AttackTypeLog repository
-	attackTypeLogFields := []string{"source", "description", "count", "severity", "threshold", "first_timestamp", "last_timestamp", "status", "recommendation", "request_path", "user_agent", "payload"}
-	attackTypeLogRepo := NewSQLiteRepository[AttackTypeLog](db, "threat_type_logs", attackTypeLogFields)
-	fmt.Println(attackTypeLogRepo)
+	// synTrafficFields := []string{"description", "source", "first_timestamp", "last_timestamp", "count", "status", "recommendation"}
+	// synTrafficLogRepo := NewSQLiteRepository[SynTrafficDetectionLog](db, "syn_traffic_logs", synTrafficFields)
+	// entry := &SynTrafficDetectionLog{
+	// 	Description:    "SYN flood detected",
+	// 	Source:         "192.168.0.1",
+	// 	FirstTimestamp: "2024-04-22 17:56:07",
+	// 	LastTimestamp:  "2024-04-22 17:56:07",
+	// 	Count:          1,
+	// 	Status:         "active",
+	// 	Recommendation: "Block the IP address",
+	// }
+	// synTrafficLogRepo.Create(entry, entry.Description, entry.Source, entry.FirstTimestamp, entry.LastTimestamp, entry.Count, entry.Status, entry.Recommendation)
+	// // AttackTypeLog repository
+	// attackTypeLogFields := []string{"source", "description", "count", "severity", "threshold", "first_timestamp", "last_timestamp", "status", "recommendation", "request_path", "user_agent", "payload"}
+	// attackTypeLogRepo := NewSQLiteRepository[AttackTypeLog](db, "threat_type_logs", attackTypeLogFields)
+	// fmt.Println(attackTypeLogRepo)
 }
 
 // ReadDB reads the data from the given database
@@ -169,25 +168,25 @@ func ReadDB(database string) (*sql.DB, error) {
 	'"request_body":"$request_body"'
 
 '}';
-*/
-func ParseNginxLog(log string) (NginxLog, error) { // Returning a copy for performance reasons
-	// Remove the enclosing curly braces from the log
-	// log = strings.TrimPrefix(log, "{")
-	// log = strings.TrimSuffix(log, "}")
-	if log[0] != '{' && log[len(log)-1] != '}' {
-		return NginxLog{}, EnvironError // Skip the log
-	}
+// */
+// func ParseNginxLog(log string) (NginxLog, error) { // Returning a copy for performance reasons
+// 	// Remove the enclosing curly braces from the log
+// 	// log = strings.TrimPrefix(log, "{")
+// 	// log = strings.TrimSuffix(log, "}")
+// 	if log[0] != '{' && log[len(log)-1] != '}' {
+// 		return NginxLog{}, EnvironError // Skip the log
+// 	}
 
-	// print("Log to parse: " + log + "\n")
+// 	// print("Log to parse: " + log + "\n")
 
-	var nginxLog NginxLog
-	err := json.NewDecoder(strings.NewReader(log)).Decode(&nginxLog)
-	if err != nil {
-		return NginxLog{}, err
-	}
+// 	var nginxLog NginxLog
+// 	err := json.NewDecoder(strings.NewReader(log)).Decode(&nginxLog)
+// 	if err != nil {
+// 		return NginxLog{}, err
+// 	}
 
-	return nginxLog, nil
-}
+// 	return nginxLog, nil
+// }
 
 func finddb(database string) bool {
 	for _, db := range dbs {
