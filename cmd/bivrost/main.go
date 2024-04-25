@@ -10,9 +10,11 @@ import (
 	"syscall"
 
 	_ "github.com/mattn/go-sqlite3"
+	"gorm.io/gorm"
 
 	"github.com/pynezz/bivrost/internal/api"
 	"github.com/pynezz/bivrost/internal/config"
+	"github.com/pynezz/bivrost/internal/database"
 	"github.com/pynezz/bivrost/internal/fetcher"
 	"github.com/pynezz/bivrost/internal/fsutil"
 	"github.com/pynezz/bivrost/internal/fswatcher"
@@ -62,19 +64,36 @@ func Execute() {
 		fswatcher.Watch("./access.log")
 	}()
 
-	nginxDB, err := fetcher.ReadDB("logs")
+	// nginxDB, err := fetcher.ReadDB("logs")
+	gormConf := gorm.Config{}
+	nginxDB, err := database.NewDataStore[fetcher.NginxLog]("logs", gormConf)
 	if err != nil {
 		util.PrintError("Failed to read the database: " + err.Error())
 		return
 	}
-	defer nginxDB.Close()
 
-	resultsDB, err := sql.Open("sqlite3", fetcher.ResultsDB)
+	nginxDB.AutoMigrate()
+	nginxDB.TestWrite("10k")
+	nginx_log_test_001 := `{"time_local":"22/Apr/2024:17:56:07 +0000","remote_addr":"43.163.232.152","remote_user":"","request":"GET /viwwwsogou?op=8&query=%E7%A8%8F%E5%BB%BA%09%E9%BE%90%E1%B7%A2 HTTP/1.1","status": "400","body_bytes_sent":"248","request_time":"0.000","http_referrer":"","http_user_agent":"Mozilla/5.0 (Windows NT 6.1; Trident/7.0; rv:11.0) like Gecko","request_body":"gorm test"}`
+
+	parsedLog, err := fetcher.ParseNginxLog(nginx_log_test_001)
 	if err != nil {
-		util.PrintError("Failed to open the results database: " + err.Error())
-		return
+		if err != fetcher.EnvironError {
+			util.PrintError("Failed to parse the log: " + err.Error())
+		}
+		util.PrintWarning("Log is an environment variable.")
 	}
-	defer resultsDB.Close()
+
+	nginxDB.InsertLog(parsedLog)
+	util.PrintSuccess("Log inserted successfully.")
+	// defer nginxDB.Close()
+
+	// resultsDB, err := sql.Open("sqlite3", fetcher.ResultsDB)
+	// if err != nil {
+	// 	util.PrintError("Failed to open the results database: " + err.Error())
+	// 	return
+	// }
+	// defer resultsDB.Close()
 
 	// Parse the command line arguments (flags)
 	flags.ParseFlags()

@@ -177,8 +177,13 @@ func setIDField[T any](entry *T, id int64) {
 }
 
 func scanRowIntoStruct(rows *sql.Rows, dest interface{}) error {
-	values := make([]interface{}, rows.FieldCount())
-	valuePtrs := make([]interface{}, rows.FieldCount())
+	columns, err := rows.Columns()
+	if err != nil {
+		return err
+	}
+
+	values := make([]interface{}, len(columns))
+	valuePtrs := make([]interface{}, len(columns))
 
 	for i := range values {
 		valuePtrs[i] = &values[i]

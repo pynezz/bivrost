@@ -5,6 +5,7 @@ package fetcher
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -36,6 +37,8 @@ var (
 	}
 
 	isReposInitialized = false
+
+	EnvironError = errors.New("log is an environment variable")
 )
 
 func NginxLogRepo() *SQLiteRepository[NginxLog] {
@@ -51,7 +54,7 @@ func InitRepos(db *sql.DB) {
 	nginxLogFields := []string{"time_local", "remote_addr", "remote_user", "request", "status", "body_bytes_sent", "request_time", "http_referrer", "http_user_agent", "request_body"}
 	nginxLogRepo := NewSQLiteRepository[NginxLog](db, "nginx_logs", nginxLogFields)
 
-	log, err := parseNginxLog(nginx_log_test_001)
+	log, err := ParseNginxLog(nginx_log_test_001)
 	if err != nil {
 		util.PrintError("Failed to parse log: " + err.Error())
 	}
@@ -76,7 +79,6 @@ func InitRepos(db *sql.DB) {
 	attackTypeLogFields := []string{"source", "description", "count", "severity", "threshold", "first_timestamp", "last_timestamp", "status", "recommendation", "request_path", "user_agent", "payload"}
 	attackTypeLogRepo := NewSQLiteRepository[AttackTypeLog](db, "threat_type_logs", attackTypeLogFields)
 	fmt.Println(attackTypeLogRepo)
-
 }
 
 // ReadDB reads the data from the given database
@@ -168,12 +170,12 @@ func ReadDB(database string) (*sql.DB, error) {
 
 '}';
 */
-func parseNginxLog(log string) (NginxLog, error) { // Returning a copy for performance reasons
+func ParseNginxLog(log string) (NginxLog, error) { // Returning a copy for performance reasons
 	// Remove the enclosing curly braces from the log
 	// log = strings.TrimPrefix(log, "{")
 	// log = strings.TrimSuffix(log, "}")
-	if log[0] == '{' && log[len(log)-1] == '}' {
-		return NginxLog{}, fmt.Errorf("log is an environment variable") // Skip the log
+	if log[0] != '{' && log[len(log)-1] != '}' {
+		return NginxLog{}, EnvironError // Skip the log
 	}
 
 	// print("Log to parse: " + log + "\n")

@@ -1,4 +1,4 @@
-CREATE TABLE nginx_logs (
+CREATE TABLE IF NOT EXISTS nginx_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     time_local TEXT NOT NULL,
     remote_addr TEXT NOT NULL,
@@ -18,5 +18,5 @@ The general guideline is to create indexes on columns that are:
  - Columns with high selectivity (unique or nearly unique values).
  - Columns that are frequently joined.
 Indexes do have some drawbacks, such as slowing down inserts and updates. But we're expecting a lot more reads than writes. */
-CREATE INDEX idx_remote_addr ON nginx_logs (remote_addr);   -- Indexing remote_addr is useful for finding requests from a specific IP
-CREATE INDEX idx_status ON nginx_logs (status);             -- To be able to search by status code      (such as 302 to find all login redirects)
+CREATE INDEX IF NOT EXISTS idx_remote_addr ON nginx_logs (remote_addr);   -- Indexing remote_addr is useful for finding requests from a specific IP
+CREATE INDEX IF NOT EXISTS idx_status ON nginx_logs (status);             -- To be able to search by status code      (such as 302 to find all login redirects)
