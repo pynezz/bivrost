@@ -16,28 +16,67 @@ import (
 
 const (
 	LogsDB             = "logs"
+	ResultsDB          = "results"
 	nginx_log_test_001 = `{"time_local":"22/Apr/2024:17:56:07 +0000","remote_addr":"43.163.232.152","remote_user":"","request":"GET /viwwwsogou?op=8&query=%E7%A8%8F%E5%BB%BA%09%E9%BE%90%E1%B7%A2 HTTP/1.1","status": "400","body_bytes_sent":"248","request_time":"0.000","http_referrer":"","http_user_agent":"Mozilla/5.0 (Windows NT 6.1; Trident/7.0; rv:11.0) like Gecko","request_body":""}`
 	nginx_log_test_002 = `{"time_local":"22/Apr/2024:16:53:00 +0000","remote_addr":"91.90.40.176","remote_user":"","request":"HEAD /(/302.php HTTP/1.1","status": "404","body_bytes_sent":"0","request_time":"0.037","http_referrer":"","http_user_agent":"DirBuster-1.0-RC1 (http://www.owasp.org/index.php/Category:OWASP_DirBuster_Project)","request_body":""}`
 	nginx_log_test_003 = `{"time_local":"22/Apr/2024:13:39:49 +0000","remote_addr":"91.90.40.176","remote_user":"","request":"POST /login HTTP/1.1","status": "302","body_bytes_sent":"0","request_time":"0.010","http_referrer":"http://164.92.132.240/","http_user_agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36","request_body":"username=admin&password=password_1234"}`
 )
 
 var (
-	nginxLogRepo      *SQLiteRepository[NginxLog]
-	threatTypeLogRepo *SQLiteRepository[ThreatTypeLog]
+	nginxLogRepo *SQLiteRepository[NginxLog]
+	// nginxLogFields = [...]string{"time_local", "remote_addr", "remote_user", "request", "status", "body_bytes_sent", "request_time", "http_referrer", "http_user_agent", "request_body"}
+
+	attackTypeLogRepo *SQLiteRepository[AttackTypeLog]
+
+	synTrafficLogRepo *SQLiteRepository[SynTrafficDetectionLog]
 
 	dbs = []string{
-		"logs",
+		LogsDB,
+		ResultsDB,
 	}
+
+	isReposInitialized = false
 )
+
+func NginxLogRepo() *SQLiteRepository[NginxLog] {
+	return nginxLogRepo
+}
+
+func AttackTypeLogRepo() *SQLiteRepository[AttackTypeLog] {
+	return attackTypeLogRepo
+}
 
 func InitRepos(db *sql.DB) {
 	// NginxLog repository
 	nginxLogFields := []string{"time_local", "remote_addr", "remote_user", "request", "status", "body_bytes_sent", "request_time", "http_referrer", "http_user_agent", "request_body"}
 	nginxLogRepo := NewSQLiteRepository[NginxLog](db, "nginx_logs", nginxLogFields)
 
-	// ThreatTypeLog repository
-	threatTypeLogFields := []string{"source", "description", "time_local", "user_agent", "payload"}
-	threatTypeLogRepo := NewSQLiteRepository[ThreatTypeLog](db, "threat_type_logs", threatTypeLogFields)
+	log, err := parseNginxLog(nginx_log_test_001)
+	if err != nil {
+		util.PrintError("Failed to parse log: " + err.Error())
+	}
+
+	if err := nginxLogRepo.Create([]NginxLog{log}, &log.ID); err != nil {
+		util.PrintError("Failed to create log: " + err.Error())
+	}
+
+	synTrafficFields := []string{"description", "source", "first_timestamp", "last_timestamp", "count", "status", "recommendation"}
+	synTrafficLogRepo := NewSQLiteRepository[SynTrafficDetectionLog](db, "syn_traffic_logs", synTrafficFields)
+	entry := &SynTrafficDetectionLog{
+		Description:    "SYN flood detected",
+		Source:         "192.168.0.1",
+		FirstTimestamp: "2024-04-22 17:56:07",
+		LastTimestamp:  "2024-04-22 17:56:07",
+		Count:          1,
+		Status:         "active",
+		Recommendation: "Block the IP address",
+	}
+	synTrafficLogRepo.Create(entry, entry.Description, entry.Source, entry.FirstTimestamp, entry.LastTimestamp, entry.Count, entry.Status, entry.Recommendation)
+	// AttackTypeLog repository
+	attackTypeLogFields := []string{"source", "description", "count", "severity", "threshold", "first_timestamp", "last_timestamp", "status", "recommendation", "request_path", "user_agent", "payload"}
+	attackTypeLogRepo := NewSQLiteRepository[AttackTypeLog](db, "threat_type_logs", attackTypeLogFields)
+	fmt.Println(attackTypeLogRepo)
+
 }
 
 // ReadDB reads the data from the given database
@@ -55,16 +94,12 @@ func ReadDB(database string) (*sql.DB, error) {
 	}
 
 	InitRepos(db)
-
 	// formatString := "\033[H\033[K%s\033[0\033[1F\033[K"
-
 	// nginxlogRepository := NewSQLiteLogs(db)
 	// if err := nginxlogRepository.Migrate(); err != nil {
 	// 	return nil, err
 	// }
-
 	testIP := "91.90.40.176"
-
 	// if readLogs, err := nginxlogRepository.GetByIP(testIP); err != nil {
 	// 	util.PrintError("error fetching log by IP: " + err.Error())
 	// } else if len(readLogs.Logs) > 0 {
@@ -75,9 +110,7 @@ func ReadDB(database string) (*sql.DB, error) {
 	// } else {
 	// 	util.PrintError("No logs found for IP: " + testIP)
 	// }
-
 	util.ItalicF("Creating a new log for IP: " + testIP)
-
 	// go func() {
 	// 	for {
 	// 		output := fmt.Sprintf(formatString, fmt.Sprintf("Open connections: %d\n", db.Stats().OpenConnections))
@@ -117,31 +150,30 @@ func ReadDB(database string) (*sql.DB, error) {
 	// util.PrintSuccess(fmt.Sprintf(" > %d min", elapsed/1000000000/60))
 
 	return db, nil
-
 }
 
 /*
-log_format standard_json escape=json
+'{'
 
-	'{'
-	  '"time_local":"$time_local",'
-	  '"remote_addr":"$remote_addr",'
-	  '"remote_user":"$remote_user",'
-	  '"request":"$request",'
-	  '"status": "$status",'
-	  '"body_bytes_sent":"$body_bytes_sent",'
-	  '"request_time":"$request_time",'
-	  '"http_referrer":"$http_referer",'
-	  '"http_user_agent":"$http_user_agent",'
-	  '"request_body":"$request_body"'
-	'}';
+	'"time_local":"$time_local",'
+	'"remote_addr":"$remote_addr",'
+	'"remote_user":"$remote_user",'
+	'"request":"$request",'
+	'"status": "$status",'
+	'"body_bytes_sent":"$body_bytes_sent",'
+	'"request_time":"$request_time",'
+	'"http_referrer":"$http_referer",'
+	'"http_user_agent":"$http_user_agent",'
+	'"request_body":"$request_body"'
+
+'}';
 */
 func parseNginxLog(log string) (NginxLog, error) { // Returning a copy for performance reasons
 	// Remove the enclosing curly braces from the log
 	// log = strings.TrimPrefix(log, "{")
 	// log = strings.TrimSuffix(log, "}")
-	if log[:7] == "ENV GET" {
-		return NginxLog{}, fmt.Errorf("log is an environment variable")
+	if log[0] == '{' && log[len(log)-1] == '}' {
+		return NginxLog{}, fmt.Errorf("log is an environment variable") // Skip the log
 	}
 
 	// print("Log to parse: " + log + "\n")

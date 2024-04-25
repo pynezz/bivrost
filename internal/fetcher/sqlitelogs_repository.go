@@ -3,6 +3,9 @@ package fetcher
 import (
 	"database/sql"
 	"errors"
+	"fmt"
+	"reflect"
+	"strings"
 
 	"github.com/pynezz/bivrost/internal/util"
 )
@@ -31,31 +34,124 @@ type SQLiteRepository[T any] struct {
 	db     *sql.DB
 	table  string
 	fields []string
+
+	insert func() (*sql.Stmt, error)
 }
 
+//	func NewSQLiteLogs(db *sql.DB) *SQLiteLogsRepository {
+//		return &SQLiteLogsRepository{
+//			db: db,
+//		}
+//	}
+
+// NewSQLiteRepository creates a new SQLiteRepository.
 func NewSQLiteRepository[T any](db *sql.DB, table string, fields []string) *SQLiteRepository[T] {
 	return &SQLiteRepository[T]{
 		db:     db,
 		table:  table,
 		fields: fields,
+
+		insert: func() (*sql.Stmt, error) {
+			insert := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", table, strings.Join(fields, ", "), strings.TrimRight(strings.Repeat("?, ", len(fields)), ", "))
+			return db.Prepare(insert)
+		},
 	}
 }
 
-func NewSQLiteLogs(db *sql.DB) *SQLiteLogsRepository {
-	return &SQLiteLogsRepository{
-		db: db,
+func (r *SQLiteRepository[T]) Create(args ...any) error {
+	// Implement the Create method
+	stmt, err := r.insert()
+	if err != nil {
+		return err
 	}
+
+	res, err := stmt.Exec(args)
+	if err != nil {
+		return err
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("inserted entry to %s with id: %d\n", r.table, id)
+
+	return nil
 }
 
-func (r *SQLiteRepository[T]) Create(entry T) (*T, error) {
+// func (r *SQLiteLogsRepository) Create(log NginxLog) (*NginxLog, error) {
+// 	res, err := r.db.Exec(
+// 		`INSERT INTO nginx_logs (
+// 			time_local, remote_addr, remote_user, request, status, body_bytes_sent, request_time, http_referrer, http_user_agent, request_body
+// 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+// 		log.TimeLocal, log.RemoteAddr, log.RemoteUser,
+// 		log.Request, log.Status, log.BodyBytesSent,
+// 		log.RequestTime, log.HttpReferer,
+// 		log.HttpUserAgent, log.RequestBody,
+// 	)
 
-	return nil, nil
-}
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	id, err := res.LastInsertId()
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	log.ID = id
+
+// 	return &log, nil
+// }
 
 func (r *SQLiteRepository[T]) All() ([]T, error) {
+	rows, err := r.db.Query(`SELECT * FROM ?`, r.table)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
 
-	return nil, nil
+	logs := make([]T, 128)
+
+	for rows.Next() {
+		var log T
+		err := scanRowIntoStruct(rows, &log)
+		if err != nil {
+			return nil, err
+		}
+
+		logs = append(logs, log)
+	}
+
+	return logs, nil
 }
+
+// func (r *SQLiteLogsRepository) All() (*NginxLogsList, error) {
+// 	rows, err := r.db.Query(`SELECT * FROM nginx_logs`)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	defer rows.Close()
+
+// 	var logs NginxLogsList // Just a slice of logs ([]NginxLog)
+// 	for rows.Next() {
+// 		var log NginxLog
+// 		err := rows.Scan(
+// 			&log.ID, &log.TimeLocal, &log.RemoteAddr, &log.RemoteUser,
+// 			&log.Request, &log.Status, &log.BodyBytesSent,
+// 			&log.RequestTime, &log.HttpReferer, &log.HttpUserAgent,
+// 			&log.RequestBody,
+// 		)
+// 		if err != nil {
+// 			return nil, err
+// 		}
+
+// 		logs.Logs = append(logs.Logs, log)
+// 	}
+
+// 	return &logs, nil
+// }
 
 func (r *SQLiteRepository[T]) GetByID(id int64) (*T, error) {
 
@@ -68,6 +164,37 @@ func (r *SQLiteRepository[T]) Update(id int64, updated T) (*T, error) {
 }
 
 func (r *SQLiteRepository[T]) Delete(id int64) error {
+
+	return nil
+}
+
+func setIDField[T any](entry *T, id int64) {
+	v := reflect.ValueOf(entry).Elem()
+	idField := v.FieldByName("ID")
+	if idField.IsValid() && idField.CanSet() {
+		idField.SetInt(id)
+	}
+}
+
+func scanRowIntoStruct(rows *sql.Rows, dest interface{}) error {
+	values := make([]interface{}, rows.FieldCount())
+	valuePtrs := make([]interface{}, rows.FieldCount())
+
+	for i := range values {
+		valuePtrs[i] = &values[i]
+	}
+
+	if err := rows.Scan(valuePtrs...); err != nil {
+		return err
+	}
+
+	rv := reflect.ValueOf(dest).Elem()
+	for i := 0; i < rv.NumField(); i++ {
+		field := rv.Field(i)
+		if field.CanSet() {
+			field.Set(reflect.ValueOf(values[i]))
+		}
+	}
 
 	return nil
 }
@@ -88,11 +215,8 @@ CREATE TABLE IF NOT EXISTS nginx_logs (
 	request_body TEXT
 );
 
-CREATE INDEX IF NOT EXISTS idx_time_local ON nginx_logs (time_local);
 CREATE INDEX IF NOT EXISTS idx_remote_addr ON nginx_logs (remote_addr);
 CREATE INDEX IF NOT EXISTS idx_status ON nginx_logs (status);
-CREATE INDEX IF NOT EXISTS idx_request_time ON nginx_logs (request_time);
-CREATE INDEX IF NOT EXISTS idx_http_path ON nginx_logs (request);
     `
 
 	// CREATE TABLE IF NOT EXISTS ssh_logs (

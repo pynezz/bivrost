@@ -1,9 +1,13 @@
 package fetcher
 
+import "gorm.io/gorm"
+
 // More info: https://gosamples.dev/sqlite-intro/
 
 type NginxLog struct {
-	ID            int64  `json:"-"` // Unique identifier - autoincremented, so no need to set it
+	gorm.Model // Includes fields ID, CreatedAt, UpdatedAt, DeletedAt
+
+	ID            int64  `json:"-" sqlite:"-"` // Unique identifier - autoincremented, so no need to set it
 	TimeLocal     string `json:"time_local"`
 	RemoteAddr    string `json:"remote_addr"`
 	RemoteUser    string `json:"remote_user"`

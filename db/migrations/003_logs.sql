@@ -18,8 +18,5 @@ The general guideline is to create indexes on columns that are:
  - Columns with high selectivity (unique or nearly unique values).
  - Columns that are frequently joined.
 Indexes do have some drawbacks, such as slowing down inserts and updates. But we're expecting a lot more reads than writes. */
-CREATE INDEX idx_time_local ON nginx_logs (time_local);     -- Create an index on the time_local for time based searches
 CREATE INDEX idx_remote_addr ON nginx_logs (remote_addr);   -- Indexing remote_addr is useful for finding requests from a specific IP
 CREATE INDEX idx_status ON nginx_logs (status);             -- To be able to search by status code      (such as 302 to find all login redirects)
-CREATE INDEX idx_request_time ON nginx_logs (request_time); -- To be able to search by request time     (to find slow requests, for example)
-CREATE INDEX idx_http_path ON nginx_logs (request);         -- To be able to search by request path     (such as /login to find all login requests)

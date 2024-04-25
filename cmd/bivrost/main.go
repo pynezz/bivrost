@@ -69,6 +69,13 @@ func Execute() {
 	}
 	defer nginxDB.Close()
 
+	resultsDB, err := sql.Open("sqlite3", fetcher.ResultsDB)
+	if err != nil {
+		util.PrintError("Failed to open the results database: " + err.Error())
+		return
+	}
+	defer resultsDB.Close()
+
 	// Parse the command line arguments (flags)
 	flags.ParseFlags()
 
