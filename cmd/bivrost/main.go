@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
-	"sync"
 	"syscall"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -50,9 +49,12 @@ func Execute() {
 		fmt.Printf("Received signal: %s\n", sig)
 		os.Exit(0)
 	}()
-	// Print the startup header
-	tui.Header.Color = util.Cyan
-	tui.Header.PrintHeader()
+
+	termiui := tui.NewTui()
+	termiui.Header.Color = util.Cyan
+	// go termiui.Display()
+	// // Create a channel to receive the log data
+	// termiui.AddDataSource(dataChan, "Watcher Output", util.Yellow) // Adding the file watcher output as a data source to the TUI
 
 	// Check for command line arguments
 	if len(os.Args) < 2 {
@@ -62,12 +64,11 @@ func Execute() {
 		return
 	}
 
-	go func() {
-		fswatcher.Watch("./access.log")
-	}()
-
 	// nginxDB, err := fetcher.ReadDB("logs")
-	gormConf := gorm.Config{}
+	gormConf := gorm.Config{
+		PrepareStmt:     true,
+		CreateBatchSize: 1000,
+	}
 	modulesData, err := database.InitDB("logs", gormConf, &models.NginxLog{},
 		&models.SynTraffic{},
 		&models.AttackType{},
@@ -78,8 +79,9 @@ func Execute() {
 		fmt.Println(err)
 	}
 
-	lineChan := make(chan string, 1000)         // Buffer of 1000 lines
-	logChan := make(chan models.NginxLog, 1000) // Buffer of 1000 logs
+	lineChan := make(chan string, 1000) // Buffer of 1000 lines
+	// logChan := make(chan models.NginxLog, 1000) // Buffer of 1000 logs
+	dataChan := make(chan string, 1000)
 
 	util.PrintBold("Testing module data store connection...")
 	synTrafficRepo, _ := database.NewDataStore[models.SynTraffic](modulesData)
@@ -87,81 +89,16 @@ func Execute() {
 	indicatorsLogRepo, _ := database.NewDataStore[models.IndicatorsLog](modulesData)
 	geoLocationDataRepo, _ := database.NewDataStore[models.GeoLocationData](modulesData)
 	geoDataRepo, _ := database.NewDataStore[models.GeoData](modulesData)
-
-	fmt.Println(synTrafficRepo, attackTypeRepo, indicatorsLogRepo, geoLocationDataRepo, geoDataRepo)
-
 	nginxLogStore, err := database.NewDataStore[models.NginxLog](modulesData)
 	if err != nil {
-		util.PrintError("Failed to read the database: " + err.Error())
-		return
+		fmt.Println(err)
 	}
-	timestamp := util.UnixNanoTimestamp()
-	var finalTime int64
-	// nginxLogStore.AutoMigrate()
-	scanner, file, err := nginxLogStore.NewTestWriter("10k")
-	if err != nil {
-		util.PrintError("Failed to open the log file: " + err.Error())
-		return
-	}
-	defer file.Close()
-	var wg sync.WaitGroup
-	util.PrintInfo("Reading 10k logs from the file...")
-	go database.ReadNginxLogs(scanner, lineChan, &wg)
 
-	util.PrintInfo("Parsing the logs...")
-	go database.ParseBufferedNginxLog(lineChan, logChan, &wg)
+	fmt.Println(*synTrafficRepo, attackTypeRepo, indicatorsLogRepo, geoLocationDataRepo, geoDataRepo, nginxLogStore)
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		util.PrintInfo("Inserting logs into the database...")
-		nginxLogStore.InsertBulk(logChan)
-	}()
-	util.PrintInfo("Waiting for the inserts to complete...")
-	wg.Wait() // Wait for all inserts to complete
-	// close(logChan)
-
-	finalTime = util.UnixNanoTimestamp()
-	elapsed := finalTime - timestamp
-	util.PrintSuccess(fmt.Sprintf("Created 10k logs\n > %d µsec", elapsed/1000))
-	util.PrintSuccess(fmt.Sprintf(" > %d msec", elapsed/1000000))
-	util.PrintSuccess(fmt.Sprintf(" > %d sec", elapsed/1000000000))
-	util.PrintSuccess(fmt.Sprintf(" > %d min", elapsed/1000000000/60))
-
-	// for scanner.Scan() {
-	// 	log, err := database.ParseNginxLog(scanner.Text())
-	// 	if err != nil {
-	// 		if err.Error() == "log is an environment variable" {
-	// 			continue
-	// 		} else {
-	// 			fmt.Errorf("Failed to parse the log: %s", err.Error())
-	// 		}
-	// 	}
-
-	// 	if err := nginxLogStore.InsertLog(log); err != nil {
-	// 		fmt.Errorf("Failed to insert log: %s", err.Error())
-	// 	}
-	// }
-	// nginx_log_test_001 := `{"time_local":"22/Apr/2024:17:56:07 +0000","remote_addr":"43.163.232.152","remote_user":"","request":"GET /viwwwsogou?op=8&query=%E7%A8%8F%E5%BB%BA%09%E9%BE%90%E1%B7%A2 HTTP/1.1","status": "400","body_bytes_sent":"248","request_time":"0.000","http_referrer":"","http_user_agent":"Mozilla/5.0 (Windows NT 6.1; Trident/7.0; rv:11.0) like Gecko","request_body":"gorm test"}`
-
-	// parsedLog, err := fetcher.ParseNginxLog(nginx_log_test_001)
-	// if err != nil {
-	// 	if err != fetcher.EnvironError {
-	// 		util.PrintError("Failed to parse the log: " + err.Error())
-	// 	}
-	// 	util.PrintWarning("Log is an environment variable.")
-	// }
-
-	// nginxDB.InsertLog(parsedLog)
-	// defer nginxDB.Close()
-	// util.PrintSuccess("Log inserted successfully.")
-
-	// resultsDB, err := sql.Open("sqlite3", fetcher.ResultsDB)
-	// if err != nil {
-	// 	util.PrintError("Failed to open the results database: " + err.Error())
-	// 	return
-	// }
-	// defer resultsDB.Close()
+	// nginxLogPath := "/var/log/nginx/access.log"
+	logalyzer(dataChan, lineChan, "/home/xkali/access.log", nginxLogStore)
+	// nginxLogWorker(nginxLogStore, lineChan, logChan)
 
 	// Parse the command line arguments (flags)
 	flags.ParseFlags()
@@ -194,7 +131,7 @@ func Execute() {
 
 	// Testing the proto connection
 	// go testProtoConnection()
-	go testUDS()
+	// go testUDS()
 
 	// Connect to database
 	db, err := middleware.NewDBService().Connect(cfg.Database.Path)
@@ -208,6 +145,8 @@ func Execute() {
 	// However this is a defer statement, so it will be called when the function returns, which is the end of the main function.
 	// Meaning that the database will be closed when the application is closed.
 	defer db.Driver.Close()
+
+	<-sigChan
 
 	port := 3000
 	if cfg.Network.Port != 0 {
@@ -293,4 +232,57 @@ func testUDS() {
 	// util.PrintColor(util.BgCyan, "Listening on UNIX domain socket...")
 
 	// uds.Listen()
+}
+
+func logalyzer(data chan string, lineChan chan string, log string, nginxLogStore *database.DataStore[models.NginxLog]) {
+	util.PrintInfo("Starting the file watcher...")
+	go func() {
+		fswatcher.Watch(log, data)
+	}()
+
+	go func() {
+		for {
+			select {
+			case line := <-data:
+				util.PrintInfo("Received line: " + line)
+				lineChan <- line
+
+				modelsChan := make(chan models.NginxLog, len(data))
+				go database.ParseBufferedNginxLog(lineChan, modelsChan)
+				nginxLogWorker(nginxLogStore, lineChan, modelsChan)
+
+			}
+		}
+	}()
+}
+
+func nginxLogWorker(nginxLogStore *database.DataStore[models.NginxLog], lineChan <-chan string, logChan chan models.NginxLog) {
+	// timestamp := util.UnixNanoTimestamp()
+	// var finalTime int64
+
+	go func() {
+		for {
+			select {
+			case log := <-lineChan:
+				util.PrintInfo("Received log: " + log)
+				parsedLog, err := database.ParseNginxLog(log)
+				if err != nil {
+					util.PrintError("Failed to parse log: " + log)
+					continue
+				}
+
+				nginxLogStore.InsertLog(parsedLog)
+			}
+			// close(logChan)
+		}
+	}()
+	// util.PrintInfo("Waiting for the inserts to complete...")
+	// close(logChan)
+
+	// finalTime = util.UnixNanoTimestamp()
+	// elapsed := finalTime - timestamp
+	// util.PrintSuccess(fmt.Sprintf("Created 10k logs\n > %d µsec", elapsed/1000))
+	// util.PrintSuccess(fmt.Sprintf(" > %d msec", elapsed/1000000))
+	// util.PrintSuccess(fmt.Sprintf(" > %d sec", elapsed/1000000000))
+	// util.PrintSuccess(fmt.Sprintf(" > %d min", elapsed/1000000000/60))
 }

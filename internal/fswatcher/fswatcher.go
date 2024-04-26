@@ -1,15 +1,17 @@
 package fswatcher
 
 import (
+	"bufio"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/pynezz/bivrost/internal/util"
 )
 
-func Watch(file string) {
+func Watch(file string, data chan<- string) {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 
@@ -20,33 +22,59 @@ func Watch(file string) {
 	}
 	defer watcher.Close()
 
-	// Start listening for events.
+	linePos := 0 // Variable to keep track of the last line read position
+
+	// Wow, this is a really ugly piece of code. I'm sorry.
 	go func() {
+		util.PrintInfo("Watching file:" + file + "...")
 		for {
 			select {
 			case event, ok := <-watcher.Events:
 				if !ok {
 					return
 				}
-				log.Println("event:", event)
-				if event.Has(fsnotify.Write) {
-					log.Println("modified file:", event.Name)
+				if event.Op&fsnotify.Write == fsnotify.Write {
+					util.PrintInfo("modified file:" + event.Name)
+					// Open the file at each write event
+					f, err := os.Open(event.Name)
+					if err != nil {
+						log.Println("error opening file:", err)
+						continue
+					}
+
+					// Read newly added data
+					scanner := bufio.NewScanner(f)
+					for i := 0; i < linePos; i++ {
+						scanner.Scan() // Skip the lines that have already been read
+					}
+
+					for scanner.Scan() {
+						data <- scanner.Text() // Send new data to channel
+						util.PrintSuccess("Read " + scanner.Text() + " from file and inserted into channel.")
+						linePos++
+					}
+					f.Close()
+
 				}
 			case err, ok := <-watcher.Errors:
 				if !ok {
+					util.PrintError("error reading file:" + err.Error())
 					return
 				}
 				log.Println("error:", err)
 			}
 		}
+
 	}()
 
-	// Add a path.
+	// Add the file to be watched.
 	err = watcher.Add(file)
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	util.PrintInfo("Waiting for SIGINT or SIGTERM... Press Ctrl+C to exit.")
 	// Wait for the signal to exit.
 	<-c
+	util.PrintInfo("Filewatcher: Cleaning up...")
 }
