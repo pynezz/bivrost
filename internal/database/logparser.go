@@ -61,6 +61,4 @@ func ParseBufferedNginxLog(lines <-chan string, logs chan<- models.NginxLog) {
 	close(logs)
 	fmt.Print("Total logs parsed:")
 	fmt.Printf("\r%d\n", count)
-	// wg.Done()
-	// close(logs)
 }

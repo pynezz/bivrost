@@ -14,7 +14,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	_ "github.com/pynezz/bivrost/internal/fetcher" // TODO: Implement @Daniel, @Patrik
+	"github.com/pynezz/bivrost/internal/database"
+	"github.com/pynezz/bivrost/internal/database/models"
 	"github.com/pynezz/bivrost/internal/fsutil"
 	"github.com/pynezz/bivrost/internal/ipc"
 	"github.com/pynezz/bivrost/internal/util"
@@ -219,7 +220,10 @@ func parseMetadata(msg ipc.GenericData) (ipc.Metadata, bool) {
 	destination := metadata.(map[string]interface{})["destination"].(map[string]interface{})["destination"]
 	destinationId := destination.(map[string]interface{})["id"].(string)
 	destinationName := destination.(map[string]interface{})["name"]
-	destinationInfo := destination.(map[string]interface{})["info"]
+	destinationInfo := destination.(map[string]interface{})["database"]
+
+	databaseName := destinationInfo.(map[string]interface{})["name"]
+	tableName := destinationInfo.(map[string]interface{})["table"]
 
 	m := ipc.Metadata{
 		Source: source,
@@ -227,6 +231,10 @@ func parseMetadata(msg ipc.GenericData) (ipc.Metadata, bool) {
 			Object: ipc.Object{
 				Id:   destinationId,
 				Name: destinationName.(string),
+				Database: ipc.Database{
+					Name:  databaseName.(string),
+					Table: tableName.(string),
+				},
 			},
 		},
 		Method: parseVerb(msg),
@@ -246,6 +254,8 @@ func parseMetadata(msg ipc.GenericData) (ipc.Metadata, bool) {
 	} else {
 		v = "???"
 	}
+
+	util.PrintColorf(util.DarkYellow, "Metadata object: %s", m)
 
 	sentence := fmt.Sprintf("\n %s wants to %s %s with id %s \n", source, v, destinationName, destinationId)
 	util.PrintBold(sentence)
@@ -286,7 +296,7 @@ func parseData(msg *ipc.IPCMessage) ipc.GenericData {
 		} else {
 			fmt.Printf("Data: %v\n", data)
 		}
-		handleGenericData(data)
+		handleGenericData(msg.Data)
 
 	case ipc.DATA_YAML:
 		// Parse the YAML data
@@ -317,8 +327,11 @@ func parseData(msg *ipc.IPCMessage) ipc.GenericData {
 	return data
 }
 
-func handleGenericData(data ipc.GenericData) {
+func handleGenericData[T any](data ipc.GenericData) {
 	// Handle the data
+	var d T
+	err := json.Unmarshal(data, &d)
+
 }
 
 // handleConnection handles the incoming connection
@@ -351,7 +364,7 @@ func (s *IPCServer) handleConnection(c net.Conn) {
 			util.PrintColorf(util.LightCyan, "Module name: %s", moduleName)
 		}
 
-		senderModule := modules.GetModule(moduleName)
+		// senderModule := modules.GetModule(moduleName)
 
 		source := fmt.Sprint(modules.Mids.GetModuleIdentifier(moduleName)) // Sorry about this (this should print the identifier of the module that sent the request)
 		fmt.Println("Source: " + source)
@@ -374,11 +387,16 @@ func (s *IPCServer) handleConnection(c net.Conn) {
 				util.PrintBold("Got a GET request - fetching data...")
 				// Get the data source
 				// modules.ModuleConfig.DataSources[mData.Destination.Name].GetLogs("path", "filter")
+				databaseName := mData.Destination.Object.Database.Name
+				tableName := mData.Destination.Object.Database.Table
 
-				sources := senderModule.Config.DataSources
+				// Get the data sources
+				fetchLatestData(databaseName, tableName)
+
+				// sources := senderModule.Config.DataSources
 				// sources := m.Config.DataSources // TODO: This does not work
 
-				if sources == nil { // If still nil
+				if source == nil { // If still nil
 					util.PrintError("Data sources are nil")
 				}
 
@@ -431,6 +449,22 @@ func (s *IPCServer) handleConnection(c net.Conn) {
 			break
 		}
 	}
+}
+
+// TODO: FORTSETT HER
+func fetchLatestLogData(databaseName, tableName string) {
+	// Get the data from the database
+	db, err := database.NewDataStore[models.NginxLog](databaseName, tableName)
+	if err != nil {
+		util.PrintError("Failed to get the data store: " + err.Error())
+	}
+
+	logs, err := db.GetAllLogs()
+	if err != nil {
+		util.PrintError("Failed to get all logs: " + err.Error())
+	}
+
+	fmt.Printf("Logs: %v\n", logs)
 }
 
 func getResource(mc *modules.ModuleConfig) string {

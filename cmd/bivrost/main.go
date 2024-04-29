@@ -66,10 +66,17 @@ func Execute() {
 
 	// nginxDB, err := fetcher.ReadDB("logs")
 	gormConf := gorm.Config{
-		PrepareStmt:     true,
-		CreateBatchSize: 1000,
+		PrepareStmt: true,
 	}
-	modulesData, err := database.InitDB("logs", gormConf, &models.NginxLog{},
+
+	// logs.db
+	logsDatabase, err := database.InitDB(database.LogsDB, gormConf, &models.NginxLog{})
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	// results.db
+	modulesData, err := database.InitDB(database.ResultsDB, gormConf,
 		&models.SynTraffic{},
 		&models.AttackType{},
 		&models.IndicatorsLog{},
@@ -89,15 +96,19 @@ func Execute() {
 	indicatorsLogRepo, _ := database.NewDataStore[models.IndicatorsLog](modulesData)
 	geoLocationDataRepo, _ := database.NewDataStore[models.GeoLocationData](modulesData)
 	geoDataRepo, _ := database.NewDataStore[models.GeoData](modulesData)
-	nginxLogStore, err := database.NewDataStore[models.NginxLog](modulesData)
+	nginxLogStore, err := database.NewDataStore[models.NginxLog](logsDatabase)
 	if err != nil {
 		fmt.Println(err)
 	}
 
+	util.PrintSuccess("Nginx log data store connection successful: " + modulesData.Name())
+	util.PrintSuccess("Module data store connection successful: " + logsDatabase.Name())
+
 	fmt.Println(*synTrafficRepo, attackTypeRepo, indicatorsLogRepo, geoLocationDataRepo, geoDataRepo, nginxLogStore)
 
 	// nginxLogPath := "/var/log/nginx/access.log"
-	logalyzer(dataChan, lineChan, "/home/xkali/access.log", nginxLogStore)
+	// Fetch and parse the logs
+	go logalyzer(dataChan, lineChan, "/home/xkali/standard.log", nginxLogStore)
 	// nginxLogWorker(nginxLogStore, lineChan, logChan)
 
 	// Parse the command line arguments (flags)
@@ -131,7 +142,7 @@ func Execute() {
 
 	// Testing the proto connection
 	// go testProtoConnection()
-	// go testUDS()
+	go testUDS()
 
 	// Connect to database
 	db, err := middleware.NewDBService().Connect(cfg.Database.Path)
@@ -236,46 +247,58 @@ func testUDS() {
 
 func logalyzer(data chan string, lineChan chan string, log string, nginxLogStore *database.DataStore[models.NginxLog]) {
 	util.PrintInfo("Starting the file watcher...")
-	go func() {
-		fswatcher.Watch(log, data)
-	}()
+	go fswatcher.Watch(log, data)
 
-	go func() {
-		for {
-			select {
-			case line := <-data:
-				util.PrintInfo("Received line: " + line)
-				lineChan <- line
+	modelsChan := make(chan models.NginxLog, 1000)
+	go database.ParseBufferedNginxLog(lineChan, modelsChan)
+	go nginxLogWorker(nginxLogStore, modelsChan)
 
-				modelsChan := make(chan models.NginxLog, len(data))
-				go database.ParseBufferedNginxLog(lineChan, modelsChan)
-				nginxLogWorker(nginxLogStore, lineChan, modelsChan)
+	for line := range data {
+		util.PrintInfo("Received line: " + line)
+		lineChan <- line
+	}
 
-			}
-		}
-	}()
+	// go func() {
+	// 	for {
+	// 		select {
+	// 		case line := <-data:
+	// 			util.PrintInfo("Received line: " + line)
+	// 			lineChan <- line
+
+	// 			modelsChan := make(chan models.NginxLog, len(data))
+	// 			go database.ParseBufferedNginxLog(lineChan, modelsChan)
+	// 			nginxLogWorker(nginxLogStore, lineChan, modelsChan)
+
+	// 		}
+	// 	}
+	// }()
 }
 
-func nginxLogWorker(nginxLogStore *database.DataStore[models.NginxLog], lineChan <-chan string, logChan chan models.NginxLog) {
+func nginxLogWorker(nginxLogStore *database.DataStore[models.NginxLog], logChan <-chan models.NginxLog) {
 	// timestamp := util.UnixNanoTimestamp()
 	// var finalTime int64
-
-	go func() {
-		for {
-			select {
-			case log := <-lineChan:
-				util.PrintInfo("Received log: " + log)
-				parsedLog, err := database.ParseNginxLog(log)
-				if err != nil {
-					util.PrintError("Failed to parse log: " + log)
-					continue
-				}
-
-				nginxLogStore.InsertLog(parsedLog)
-			}
-			// close(logChan)
+	for log := range logChan {
+		util.PrintInfo("Processing parsed log for storage")
+		if err := nginxLogStore.InsertLog(log); err != nil {
+			util.PrintError("Failed to insert log: " + err.Error())
 		}
-	}()
+	}
+	// go func() {
+	// 	for {
+	// 		select {
+	// 		case log := <-lineChan:
+	// 			util.PrintInfo("Received log: " + log)
+	// 			parsedLog, err := database.ParseNginxLog(log)
+	// 			if err != nil {
+	// 				util.PrintError("Failed to parse log: " + log)
+	// 				continue
+	// 			}
+
+	// 			nginxLogStore.InsertLog(parsedLog)
+	// 		}
+	// 		// close(logChan)
+	// 	}
+	// }()
 	// util.PrintInfo("Waiting for the inserts to complete...")
 	// close(logChan)
 

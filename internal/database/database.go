@@ -123,6 +123,16 @@ func (s *DataStore[T]) GetAllLogs() ([]T, error) {
 	return logs, result.Error
 }
 
+// GetEntriesByIP returns all logs with the given
+func (s *DataStore[T]) GetEntriesByIP(ip string) ([]T, error) {
+	var entries []T
+	util.PrintInfo("Getting entries by IP:" + ip)
+	result := s.db.Where("remote_addr = ?", ip).Find(&entries)
+	util.PrintInfo("Entries found: " + string(len(entries)))
+
+	return entries, result.Error
+}
+
 // GetLogByID returns the log with the given ID
 func (s *DataStore[T]) GetLogByID(id uint) (*T, error) {
 	var log T

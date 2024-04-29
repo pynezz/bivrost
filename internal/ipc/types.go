@@ -50,20 +50,20 @@ type Destination struct {
 	Object Object `json:"destination" yaml:"destination"` // Object (descriptor of the destination) should unmarsal as Destination
 }
 
-type GetJSON struct {
-	Metadata    Metadata `json:"metadata"`
-	Description string   `json:"description"`
-}
-
 type Object struct {
-	Id   string `json:"id"`
-	Name string `json:"name"`
-	Info string `json:"info"`
+	Id       string   `json:"id"`
+	Name     string   `json:"name"`
+	Database Database `json:"database"`
 }
 
 type Database struct {
 	Name  string `json:"name"`
 	Table string `json:"table"`
+}
+
+type GetJSON struct {
+	Metadata    Metadata `json:"metadata"`
+	Description string   `json:"description"`
 }
 
 // ----------------------------
