@@ -10,6 +10,7 @@ package database
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/pynezz/bivrost/internal/database/models"
 	"github.com/pynezz/bivrost/internal/util"
@@ -27,6 +28,12 @@ const (
 
 var (
 	EnvironError = errors.New("log is an environment variable")
+
+	dbNames = map[string]string{
+		LogsDB:    "logs.db",
+		ResultsDB: "results.db",
+		// Remember to add new databases here if needed in the future
+	}
 )
 
 func Testrun() {
@@ -37,7 +44,10 @@ func Testrun() {
 		fmt.Println(err)
 	}
 
-	nginxLogDB, err := NewDataStore[models.NginxLog](db)
+	nginxLogDB, err := NewDataStore[models.NginxLog](db, "nginx_logs")
+
+	// AddStore[models.NginxLog]((*DataStore[any])(nginxLogDB)) // Specify the type explicitly
+
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -56,14 +66,54 @@ func Testrun() {
 	}
 }
 
-// Generic repository implementation
-type DataStore[T any] struct {
-	db *gorm.DB
+func (s *DataStore[T]) Name() string {
+	return s.name
 }
 
+func chkExt(database string) string {
+	strParts := strings.Split(database, ".")
+	if l := len(strParts); l > 1 && strParts[1] == "db" {
+		return strings.Split(database, ".")[0]
+	} else if l > 1 && strParts[1] != "db" {
+		return ""
+	}
+	return database
+}
+
+func InitLogsDB(config ...gorm.Config) (*gorm.DB, error) {
+	dbConf := gorm.Config{}
+	if c := len(config); c != 0 {
+		dbConf = config[0]
+	}
+	return InitDB(LogsDB, dbConf, &models.NginxLog{})
+}
+
+// Initialize the results database
+// config is optional
+func InitResultsDB(config ...gorm.Config) (*gorm.DB, error) {
+	dbConf := gorm.Config{}
+	if c := len(config); c != 0 {
+		dbConf = config[0]
+	}
+
+	resultsDB, err := InitDB(ResultsDB, dbConf,
+		&models.SynTraffic{},
+		&models.AttackType{},
+		&models.IndicatorsLog{},
+		&models.GeoLocationData{},
+		&models.GeoData{})
+	if err != nil {
+		fmt.Println(err)
+	}
+	return resultsDB, err
+}
+
+// Initialize the database with the given name and configuration, and automigrate the given tables
 func InitDB(database string, conf gorm.Config, tables ...interface{}) (*gorm.DB, error) {
-	if database == "" {
-		return nil, fmt.Errorf("database name is required")
+	if _, ok := isValidDb(database); !ok && database != "" {
+		return nil, fmt.Errorf("database name missing or invalid. Format: <name>.db or <name")
+	} else {
+		database = chkExt(database)
 	}
 
 	db, err := gorm.Open(sqlite.Open(database+".db"), &conf)
@@ -79,9 +129,8 @@ func InitDB(database string, conf gorm.Config, tables ...interface{}) (*gorm.DB,
 }
 
 // Initialize DB and automigrate given model
-func NewDataStore[T any](db *gorm.DB) (*DataStore[T], error) {
-
-	store := &DataStore[T]{db: db}
+func NewDataStore[StoreType any](db *gorm.DB, name string) (*DataStore[StoreType], error) {
+	store := &DataStore[StoreType]{db: db, name: name}
 	if err := db.AutoMigrate(); err != nil {
 		return nil, err
 	}
@@ -124,13 +173,55 @@ func (s *DataStore[T]) GetAllLogs() ([]T, error) {
 }
 
 // GetEntriesByIP returns all logs with the given
-func (s *DataStore[T]) GetEntriesByIP(ip string) ([]T, error) {
+func (s *DataStore[T]) GetLogsByIP(ip string) ([]T, error) {
 	var entries []T
 	util.PrintInfo("Getting entries by IP:" + ip)
 	result := s.db.Where("remote_addr = ?", ip).Find(&entries)
-	util.PrintInfo("Entries found: " + string(len(entries)))
+	util.PrintInfo("Entries found: " + fmt.Sprintf("%d", len(entries)))
 
 	return entries, result.Error
+}
+
+func GetTableCount(db *gorm.DB, table string) (int64, error) {
+	var count int64
+	result := db.Table(table).Count(&count)
+	return count, result.Error
+}
+
+// GetUniqueValues returns the unique values of a column in a table with optional column names
+// to filter by. If no column names are provided, all columns are returned.
+// The function returns the unique values and an error if any.
+// Example usage: GetUniqueValues(db, "nginx_logs", "remote_addr")
+// Example usage: GetUniqueValues(db, "nginx_logs", "remote_addr", "status")
+func GetUniqueValues(db *gorm.DB, table string, column ...string) ([]string, error) {
+	var values []string
+	var result *gorm.DB
+	if a := column[0]; a == "all" || a == "*" || len(column) < 1 { // Get all columns
+		result = db.Table(table).Distinct("*").Find(&values)
+	} else {
+		result = db.Table(table).Select(column).Distinct(column).Find(&values)
+	}
+
+	return values, result.Error
+}
+
+// GetUniqueValuesByIP returns the unique values of a column in a table with optional column names
+// select distinct remote_addr FROM nginx_logs WHERE remote_addr IS NOT NULL;
+func GetUniqueValuesByIP(db *gorm.DB, column, table, ip string) ([]string, error) {
+	var values []string
+	result := db.Table(table).Select(column).Where("remote_addr = ?", ip).Group(column).Find(&values)
+	return values, result.Error
+}
+
+func GetUniqueValuesLen(db *gorm.DB, column, table string) (int, error) {
+	values, result := GetUniqueValues(db, column, table)
+	return len(values), result
+}
+
+func GetValueFromTable(db *gorm.DB, value, table string) ([]string, error) {
+	var columns []string
+	result := db.Table(table).Select(value).Find(&columns)
+	return columns, result.Error
 }
 
 // GetLogByID returns the log with the given ID
@@ -155,4 +246,14 @@ func (s *DataStore[T]) DeleteLog(id uint) error {
 
 	result := s.db.Delete(&instance, id)
 	return result.Error
+}
+
+func isValidDb(database string) (string, bool) {
+	database = chkExt(database)
+	for _, db := range dbNames {
+		if db == database {
+			return database, true
+		}
+	}
+	return "", false
 }

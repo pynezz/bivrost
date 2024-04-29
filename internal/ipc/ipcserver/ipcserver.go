@@ -281,21 +281,20 @@ func parseData(msg *ipc.IPCMessage) ipc.GenericData {
 	case ipc.DATA_TEXT:
 		fmt.Println("Data is string")
 	case ipc.DATA_INT:
-		// Parse the integer data
 		// Might be a disconnect message
 		fmt.Println("Data is integer")
-
 	case ipc.DATA_JSON:
 		// Parse the JSON data
 		fmt.Println("Data is json / generic data")
 
-		// var temp interface{}
 		err := json.Unmarshal(msg.Data, &data)
 		if err != nil {
 			fmt.Println("Error unmarshaling JSON data:", err)
 		} else {
 			fmt.Printf("Data: %v\n", data)
 		}
+
+		// Get the
 		handleGenericData(msg.Data)
 
 	case ipc.DATA_YAML:
@@ -305,7 +304,7 @@ func parseData(msg *ipc.IPCMessage) ipc.GenericData {
 		if err != nil {
 			fmt.Println("Error unmarshaling YAML data:", err)
 		}
-		handleGenericData(data)
+		handleGenericData(msg.Data)
 
 	case ipc.DATA_BIN:
 		// Parse the binary data
@@ -327,10 +326,9 @@ func parseData(msg *ipc.IPCMessage) ipc.GenericData {
 	return data
 }
 
-func handleGenericData[T any](data ipc.GenericData) {
+func handleGenericData(data any) {
 	// Handle the data
-	var d T
-	err := json.Unmarshal(data, &d)
+	fmt.Println("Handling generic data...")
 
 }
 
@@ -391,39 +389,13 @@ func (s *IPCServer) handleConnection(c net.Conn) {
 				tableName := mData.Destination.Object.Database.Table
 
 				// Get the data sources
-				fetchLatestData(databaseName, tableName)
+				util.PrintColorf(util.LightCyan, "Database: %s\nTable: %s", databaseName, tableName)
 
-				// sources := senderModule.Config.DataSources
-				// sources := m.Config.DataSources // TODO: This does not work
-
-				if source == nil { // If still nil
-					util.PrintError("Data sources are nil")
-				}
-
-				util.PrintSuccess("Data sources: " + fmt.Sprintf("%v", sources))
+				// Ask database for the data
+				fetchLatestLogData(databaseName, tableName)
 
 				var found bool
 				found = false
-
-				// Find the module config for the module that sent the request
-				for _, source := range sources { // Loop through the modules
-					if source.Name == mData.Source { // Find the module in the stored module configs
-						// Get the source path and filter
-						// path := source.Location  // TODO: Implement this
-						// db, err := fetcher.ReadDB("logs") // TODO: Implement this
-						// if err != nil {
-						// 	util.PrintError("Failed to read the database: " + err.Error())
-						// }
-
-						// // logs, err := db.GetByIP("192.168.0.1")
-						// if err != nil {
-						// 	util.PrintError("Failed to get logs: " + err.Error())
-						// }
-
-						util.PrintBold("Found source: " + source.Name)
-						found = true
-					}
-				}
 
 				if !found {
 					util.PrintError("Source not found")
@@ -432,7 +404,6 @@ func (s *IPCServer) handleConnection(c net.Conn) {
 
 				} else {
 					// Get the logs
-					// mData.GetLogs(path, filter)
 
 					// Respond with the data
 					util.PrintSuccess("Data fetched successfully")
@@ -451,15 +422,36 @@ func (s *IPCServer) handleConnection(c net.Conn) {
 	}
 }
 
+// Get the model based on the table name
+func tableToModel(tableName string) any {
+	for range models.GetModels() {
+		switch tableName {
+		case models.ATTACK_TYPE:
+			return models.AttackType{}
+		case models.NGINX_LOGS:
+			return models.NginxLog{}
+		case models.SYN_TRAFFIC:
+			return models.SynTraffic{}
+		case models.GEO_DATA:
+			return models.GeoData{}
+		case models.GEO_LOCATION_DATA:
+			return models.GeoLocationData{}
+		default:
+			return nil
+		}
+	}
+	return nil
+}
+
 // TODO: FORTSETT HER
 func fetchLatestLogData(databaseName, tableName string) {
 	// Get the data from the database
-	db, err := database.NewDataStore[models.NginxLog](databaseName, tableName)
-	if err != nil {
-		util.PrintError("Failed to get the data store: " + err.Error())
+	store := database.GetStore(tableName)
+	if store == nil {
+		util.PrintError("Failed to get the data store: " + store.Name())
 	}
 
-	logs, err := db.GetAllLogs()
+	logs, err := store.GetAllLogs()
 	if err != nil {
 		util.PrintError("Failed to get all logs: " + err.Error())
 	}
@@ -496,8 +488,6 @@ func (s *IPCServer) respond(c net.Conn, req ipc.IPCRequest) error {
 			return err
 		}
 	} else {
-
-		// TODO: Refactor. Not very pretty. (the identifier key part)
 
 		// TODO: Implement different responses based on verbs/methods
 

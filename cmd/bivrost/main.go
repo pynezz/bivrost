@@ -25,6 +25,7 @@ import (
 	"github.com/pynezz/bivrost/modules"
 
 	"github.com/pynezz/bivrost/internal/database/models"
+	"github.com/pynezz/bivrost/internal/database/stores"
 )
 
 // 1. The main function is the entry point of the application.
@@ -53,7 +54,7 @@ func Execute() {
 	termiui := tui.NewTui()
 	termiui.Header.Color = util.Cyan
 	// go termiui.Display()
-	// // Create a channel to receive the log data
+	// Create a channel to receive the log data
 	// termiui.AddDataSource(dataChan, "Watcher Output", util.Yellow) // Adding the file watcher output as a data source to the TUI
 
 	// Check for command line arguments
@@ -70,18 +71,13 @@ func Execute() {
 	}
 
 	// logs.db
-	logsDatabase, err := database.InitDB(database.LogsDB, gormConf, &models.NginxLog{})
+	logsDatabase, err := database.InitLogsDB(gormConf)
 	if err != nil {
 		fmt.Println(err)
 	}
 
 	// results.db
-	modulesData, err := database.InitDB(database.ResultsDB, gormConf,
-		&models.SynTraffic{},
-		&models.AttackType{},
-		&models.IndicatorsLog{},
-		&models.GeoLocationData{},
-		&models.GeoData{})
+	modulesData, err := database.InitResultsDB(gormConf)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -91,20 +87,30 @@ func Execute() {
 	dataChan := make(chan string, 1000)
 
 	util.PrintBold("Testing module data store connection...")
-	synTrafficRepo, _ := database.NewDataStore[models.SynTraffic](modulesData)
-	attackTypeRepo, _ := database.NewDataStore[models.AttackType](modulesData)
-	indicatorsLogRepo, _ := database.NewDataStore[models.IndicatorsLog](modulesData)
-	geoLocationDataRepo, _ := database.NewDataStore[models.GeoLocationData](modulesData)
-	geoDataRepo, _ := database.NewDataStore[models.GeoData](modulesData)
-	nginxLogStore, err := database.NewDataStore[models.NginxLog](logsDatabase)
+
 	if err != nil {
 		fmt.Println(err)
 	}
 
+	// synTrafficRepo, _ := database.NewDataStore[models.SynTraffic](modulesData, "syntraffic")
+	// attackTypeRepo, _ := database.NewDataStore[models.AttackType](modulesData, "attacktype")
+	// indicatorsLogRepo, _ := database.NewDataStore[models.IndicatorsLog](modulesData, "indicatorslog")
+	// geoLocationDataRepo, _ := database.NewDataStore[models.GeoLocationData](modulesData, "geolocationdata")
+	// geoDataRepo, _ := database.NewDataStore[models.GeoData](modulesData, "geodata")
+	// nginxLogStore, err := database.NewDataStore[models.NginxLog](logsDatabase, "nginx_logs")
+
 	util.PrintSuccess("Nginx log data store connection successful: " + modulesData.Name())
 	util.PrintSuccess("Module data store connection successful: " + logsDatabase.Name())
 
-	fmt.Println(*synTrafficRepo, attackTypeRepo, indicatorsLogRepo, geoLocationDataRepo, geoDataRepo, nginxLogStore)
+	s, err := stores.Import()
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	nginxLogStore, err := s.Get("nginx_logs").NginxLogStore.GetLogByID(1)
+	if err != nil {
+		fmt.Println(err)
+	}
 
 	// nginxLogPath := "/var/log/nginx/access.log"
 	// Fetch and parse the logs

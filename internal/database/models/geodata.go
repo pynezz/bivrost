@@ -19,3 +19,14 @@ type GeoData struct {
 	GeoLocationDataID uint
 	GeoLocationData   GeoLocationData `gorm:"foreignKey:GeoLocationDataID"`
 }
+
+type GeoDataModel interface {
+	GeoData         // Embed the GeoData interface
+	GeoLocationData // Embed the GeoLocationData interface
+
+	GetGeoData() *GeoData
+}
+
+func (g *GeoData) Store() *GeoData {
+	return g
+}
