@@ -304,7 +304,7 @@ func nginxLogWorker(nginxLogStore *database.DataStore[models.NginxLog], logChan 
 		util.PrintError("Failed to insert logs: " + err.Error())
 	} else {
 		util.PrintSuccess("Logs inserted successfully.")
-		wg.Done()
+
 	}
 
 	util.PrintBold("Processing parsed logs for storage...")

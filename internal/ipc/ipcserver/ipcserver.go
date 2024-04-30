@@ -259,7 +259,7 @@ func parseMetadata(msg ipc.GenericData) (ipc.Metadata, bool) {
 
 	sentence := fmt.Sprintf("\n %s wants to %s %s with id %s \n", source, v, destinationName, destinationId)
 	util.PrintBold(sentence)
-	util.PrintItalic("Additional info: " + destinationInfo.(string))
+	util.PrintItalic("Database name: " + databaseName.(string) + "\nTable name: " + tableName.(string))
 
 	return m, metadata != nil
 }
@@ -371,6 +371,7 @@ func (s *IPCServer) handleConnection(c net.Conn) {
 
 		// Process the request...
 		util.PrintColorf(util.BgGreen, "Received: %+v\n", inboundRequest)
+		var response []byte
 
 		// Parse metadata
 		mData, ok := parseMetadata(d)
@@ -392,33 +393,46 @@ func (s *IPCServer) handleConnection(c net.Conn) {
 				util.PrintColorf(util.LightCyan, "Database: %s\nTable: %s", databaseName, tableName)
 
 				// Ask database for the data
-				fetchLatestLogData(databaseName, tableName)
-
-				var found bool
-				found = false
-
-				if !found {
+				// TODO: Remember to make sure only the latest data is fetched
+				latestData := fetchLatestLogData(databaseName, tableName)
+				if latestData == nil {
 					util.PrintError("Source not found")
-
+					response = []byte("Error, source not found")
 					// Respond with an error
+					util.PrintError("Failed to fetch the data")
 
 				} else {
 					// Get the logs
-
+					response = latestData
 					// Respond with the data
 					util.PrintSuccess("Data fetched successfully")
 				}
+			}
+			if mData.Method == "POST" {
+				util.PrintBold("Got a POST request - inserting data...")
+				// Insert the data into the database
+
+				databaseName := mData.Destination.Object.Database.Name
+				tableName := mData.Destination.Object.Database.Table
+				insertData(databaseName, tableName, d)
 			}
 		}
 
 		// dest := mData.Source
 
 		// Finally, respond to the client
-		err = s.respond(c, inboundRequest)
+		moduleId := string(inboundRequest.Header.Identifier[:]) // TODO: req.Header.Identifier is the server identifier, not the module identifier
+		if crcOk := s.CheckCRC32(inboundRequest); !crcOk {
+			response = []byte("CHKSUM ERROR")
+			break
+		}
+
+		err = s.respond(c, response, moduleId)
 		if err != nil {
 			util.PrintError("handleConnection: " + err.Error())
 			break
 		}
+		responseTime(inboundRequest.Timestamp)
 	}
 }
 
@@ -443,58 +457,99 @@ func tableToModel(tableName string) any {
 	return nil
 }
 
-// TODO: FORTSETT HER
-func fetchLatestLogData(databaseName, tableName string) {
-	// Get the data from the database
-	s, err := stores.Use(databaseName)
+// WIP: Not tested yet.
+// TODO: Test
+func insertData(databaseName, tableName string, data any) {
+	// Get the data store
+
+	s, err := stores.Use(tableName)
 	if err != nil {
 		util.PrintError("Failed to get the data store: " + s.NginxLogStore.Name())
 	}
 
-	logs, err := s.NginxLogStore.GetLogByID(104124)
+	util.PrintDebug("Getting the data store...")
+	// Insert the data into the database
+
+	// Depending on the table name, insert the data into the database
+	switch tableName {
+	case models.ATTACK_TYPE:
+		// Insert the data into the database
+		util.PrintDebug("Inserting data into the database...")
+		err := s.AttackTypeStore.InsertLog(data.(models.AttackType))
+		if err != nil {
+			util.PrintError("Failed to insert the data: " + err.Error())
+		}
+
+	case models.NGINX_LOGS:
+		return
+	case models.SYN_TRAFFIC:
+		err := s.SynTrafficStore.InsertLog(data.(models.SynTraffic))
+		if err != nil {
+			util.PrintError("Failed to insert the data: " + err.Error())
+		}
+	case models.GEO_DATA:
+		err := s.GeoDataStore.InsertLog(data.(models.GeoData))
+		if err != nil {
+			util.PrintError("Failed to insert the data: " + err.Error())
+		}
+	case models.GEO_LOCATION_DATA:
+		err := s.GeoLocationDataStore.InsertLog(data.(models.GeoLocationData))
+		if err != nil {
+			util.PrintError("Failed to insert the data: " + err.Error())
+		}
+	default:
+		util.PrintError("Table not found: " + tableName)
+	}
+}
+
+// TODO: FORTSETT HER
+func fetchLatestLogData(databaseName, tableName string) []byte {
+	// Get the data from the database
+	util.PrintDebug("Fetching the latest log data...")
+	s, err := stores.Use(tableName)
+	if err != nil {
+		util.PrintError("Failed to get the data store: " + s.NginxLogStore.Name())
+	}
+
+	util.PrintDebug("Getting the data store...")
+
+	logs, err := s.NginxLogStore.GetLogByID(10)
 	if err != nil {
 		util.PrintError("Failed to get all logs: " + err.Error())
 	}
 
+	util.PrintDebug("Getting all logs...")
+
+	ret, err := json.Marshal(&logs)
+	if err != nil {
+		util.PrintError("Failed to marshal the logs: " + err.Error())
+	}
+
 	fmt.Printf("Logs: %v\n", logs)
+
+	return ret
 }
 
 func getResource(mc *modules.ModuleConfig) string {
 	return mc.Database.Path
 }
 
+func (s *IPCServer) CheckCRC32(req ipc.IPCRequest) bool {
+	return req.Checksum32 == int(crc(req.Message.Data))
+}
+
 // c is the connection to the client
 // req is the request from the client, but // TODO: It should be the request to the client
-func (s *IPCServer) respond(c net.Conn, req ipc.IPCRequest) error {
-	if req.Checksum32 == 0 {
-		util.PrintWarning("Checksum is 0, skipping response")
-		return nil
-	}
-
+func (s *IPCServer) respond(c net.Conn, data []byte, moduleId string) error {
 	util.PrintDebug("Responding to the client...")
-
-	// TODO: Check this part
-	moduleId := string(req.Header.Identifier[:]) // TODO: req.Header.Identifier is the server identifier, not the module identifier
 
 	var response *ipc.IPCRequest
 	var err error
+	// TODO: Implement different responses based on verbs/methods
 
-	ok := req.Checksum32 == int(crc(req.Message.Data))
-
-	if !ok {
-		fmt.Printf("Request checksum: %v\nCalculated checksum: %v\n", req.Checksum32, crc(req.Message.Data))
-		response, err = NewIPCMessage(moduleId, ipc.MSG_ERROR, []byte("CHKSUM ERROR"))
-		if err != nil {
-			return err
-		}
-	} else {
-
-		// TODO: Implement different responses based on verbs/methods
-
-		response, err = NewIPCMessage(moduleId, ipc.MSG_ACK, []byte("OK"))
-		if err != nil {
-			return err
-		}
+	response, err = NewIPCMessage(moduleId, ipc.MSG_ACK, data)
+	if err != nil {
+		return err
 	}
 
 	var responseBuffer bytes.Buffer
@@ -509,8 +564,6 @@ func (s *IPCServer) respond(c net.Conn, req ipc.IPCRequest) error {
 		return err
 	}
 	util.PrintColor(util.BgGreen, "🚀 Response sent!")
-
-	responseTime(req.Timestamp)
 
 	return nil
 }

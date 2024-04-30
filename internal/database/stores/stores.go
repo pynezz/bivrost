@@ -154,6 +154,7 @@ func (s *Stores) Export() {
 }
 
 func Use(store string) (*Stores, error) {
+	util.PrintDebug("Using store " + store)
 	if ok := StoreMap[store]; ok == nil {
 		return nil, fmt.Errorf("store %s not found", store)
 	}
