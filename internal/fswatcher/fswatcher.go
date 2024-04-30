@@ -2,6 +2,7 @@ package fswatcher
 
 import (
 	"bufio"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -23,6 +24,12 @@ func Watch(file string, data chan<- string) {
 	defer watcher.Close()
 
 	linePos := 0 // Variable to keep track of the last line read position
+	f, err := os.Open(file)
+	if err != nil {
+		log.Println("error opening file:", err)
+	}
+
+	scanner := bufio.NewScanner(f)
 
 	// Wow, this is a really ugly piece of code. I'm sorry.
 	go func() {
@@ -36,21 +43,16 @@ func Watch(file string, data chan<- string) {
 				if event.Op&fsnotify.Write == fsnotify.Write {
 					util.PrintInfo("modified file:" + event.Name)
 					// Open the file at each write event
-					f, err := os.Open(event.Name)
-					if err != nil {
-						log.Println("error opening file:", err)
-						continue
-					}
 
 					// Read newly added data
-					scanner := bufio.NewScanner(f)
+					// scanner := bufio.NewScanner(f)
 					for i := 0; i < linePos; i++ {
 						scanner.Scan() // Skip the lines that have already been read
 					}
 
 					for scanner.Scan() {
 						data <- scanner.Text() // Send new data to channel
-						util.PrintSuccess("Read " + scanner.Text() + " from file and inserted into channel.")
+						util.PrintSuccess("[" + fmt.Sprintf("%d", linePos) + "] Read " + scanner.Text() + " from file and inserted into channel.")
 						linePos++
 					}
 					f.Close()

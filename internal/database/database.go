@@ -36,35 +36,34 @@ var (
 	}
 )
 
-func Testrun() {
-	util.PrintColorBold(util.DarkGreen, "Testing module data store connection...")
-	dbConf := gorm.Config{} // No config for now
-	db, err := InitDB("logs", dbConf)
-	if err != nil {
-		fmt.Println(err)
-	}
+// func Testrun() {
+// 	util.PrintColorBold(util.DarkGreen, "Testing module data store connection...")
+// 	dbConf := gorm.Config{} // No config for now
+// 	db, err := InitDB("logs", dbConf)
+// 	if err != nil {
+// 		fmt.Println(err)
+// 	}
 
-	nginxLogDB, err := NewDataStore[models.NginxLog](db, "nginx_logs")
+// 	nginxLogDB, err := NewDataStore[models.NginxLog](db, "nginx_logs")
 
-	// AddStore[models.NginxLog]((*DataStore[any])(nginxLogDB)) // Specify the type explicitly
+// 	// AddStore[models.NginxLog]((*DataStore[any])(nginxLogDB)) // Specify the type explicitly
 
-	if err != nil {
-		fmt.Println(err)
-	}
+// 	if err != nil {
+// 		fmt.Println(err)
+// 	}
 
-	// Insert a log
-	log, err := ParseNginxLog(nginx_log_test_001)
-	if err != nil {
-		if err != EnvironError {
-			fmt.Println(err)
-		}
-		util.PrintWarning("Log is an environment variable.")
-	}
+// 	// Insert a log
+// 	if err != nil {
+// 		if err != EnvironError {
+// 			fmt.Println(err)
+// 		}
+// 		util.PrintWarning("Log is an environment variable.")
+// 	}
 
-	if err := nginxLogDB.InsertLog(log); err != nil {
-		fmt.Println(err)
-	}
-}
+// 	if err := nginxLogDB.InsertLog(log); err != nil {
+// 		fmt.Println(err)
+// 	}
+// }
 
 func (s *DataStore[T]) Name() string {
 	return s.name
@@ -85,6 +84,7 @@ func InitLogsDB(config ...gorm.Config) (*gorm.DB, error) {
 	if c := len(config); c != 0 {
 		dbConf = config[0]
 	}
+	util.PrintInfo("Initializing logs database...")
 	return InitDB(LogsDB, dbConf, &models.NginxLog{})
 }
 
@@ -95,7 +95,7 @@ func InitResultsDB(config ...gorm.Config) (*gorm.DB, error) {
 	if c := len(config); c != 0 {
 		dbConf = config[0]
 	}
-
+	util.PrintInfo("Initializing results database...")
 	resultsDB, err := InitDB(ResultsDB, dbConf,
 		&models.SynTraffic{},
 		&models.AttackType{},
@@ -125,6 +125,8 @@ func InitDB(database string, conf gorm.Config, tables ...interface{}) (*gorm.DB,
 		return nil, err
 	}
 
+	db = db.Session(&gorm.Session{CreateBatchSize: 100})
+
 	return db, nil
 }
 
@@ -149,19 +151,54 @@ func (s *DataStore[T]) InsertLog(log T) error {
 	return result.Error
 }
 
-func (s *DataStore[T]) InsertBulk(buffer <-chan T) error {
-	count := 0
-	util.PrintColor(util.LightGreen, "InsertBulk() started.")
-	for log := range buffer {
-		if err := s.InsertLog(log); err != nil {
-			fmt.Println("Failed to insert log:", err)
-			return err
-		}
-		count++
+func (s *DataStore[T]) insertBatch(batch []models.NginxLog) int {
+	result := s.db.Create(&batch)
+	if result.Error != nil {
+		util.PrintError("Failed to insert batch: " + result.Error.Error())
 	}
-	fmt.Print("\t\t\t\t\tTotal logs inserted: ")
-	fmt.Printf("\r%d\n", count)
-	util.PrintColor(util.LightGreen, "InsertBulk() done.")
+
+	util.PrintSuccess("Inserted batch of size: " + fmt.Sprintf("%d", len(batch)) + " into table: " + s.name + " of type " + fmt.Sprintf("%T", batch[0]))
+
+	resString := fmt.Sprintf("SQL: %s\n", result.Statement.SQL.String())
+	util.PrintColorAndBg(util.LightGreen, util.BgGray, resString)
+
+	return int(result.RowsAffected)
+}
+
+// SQL TEST:  select id, remote_addr, time_local from nginx_logs where remote_addr and time_local is not null LIMIT 10;
+func (s *DataStore[T]) InsertBulk(logChan <-chan models.NginxLog) error {
+	var count int64
+	batchSize := 100
+	buffer := make([]models.NginxLog, 0)
+	done := make(chan struct{})
+	counter := 0
+
+	go func() {
+
+		// TODO: Fix close channel so that we can insert the rest of the logs (no worries for now, it will still insert them when it reaches 100 logs in the buffer)
+		defer close(done)
+		for log := range logChan {
+			counter++
+			util.PrintColorAndBg(util.White, "\033[40m", "Inserting log: ")
+			util.PrintColor(util.DarkCyan, string(log.ID))
+			buffer = append(buffer, log)
+			if counter%batchSize == 0 {
+				util.PrintColorAndBg(util.White, util.BgRed, "buffer limit reached, inserting batch...")
+				count += int64(s.insertBatch(buffer))
+				buffer = make([]models.NginxLog, 0)
+			}
+		}
+	}()
+
+	go func() {
+		<-done
+		if len(buffer) > 0 {
+			util.PrintColorAndBg(util.White, util.DarkYellow, "inserting remaining logs...")
+			count += int64(s.insertBatch(buffer))
+		}
+		util.PrintInfo("InsertBulk() finished inserting logs, closing buffer.")
+	}()
+
 	return nil
 }
 
@@ -251,9 +288,11 @@ func (s *DataStore[T]) DeleteLog(id uint) error {
 func isValidDb(database string) (string, bool) {
 	database = chkExt(database)
 	for _, db := range dbNames {
-		if db == database {
+		if db == database+".db" {
+			util.PrintSuccess("Database name is valid: " + database)
 			return database, true
 		}
 	}
+	util.PrintError("Database name is invalid: " + database)
 	return "", false
 }

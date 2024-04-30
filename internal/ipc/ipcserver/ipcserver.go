@@ -14,8 +14,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/pynezz/bivrost/internal/database"
 	"github.com/pynezz/bivrost/internal/database/models"
+	"github.com/pynezz/bivrost/internal/database/stores"
 	"github.com/pynezz/bivrost/internal/fsutil"
 	"github.com/pynezz/bivrost/internal/ipc"
 	"github.com/pynezz/bivrost/internal/util"
@@ -446,12 +446,12 @@ func tableToModel(tableName string) any {
 // TODO: FORTSETT HER
 func fetchLatestLogData(databaseName, tableName string) {
 	// Get the data from the database
-	store := database.GetStore(tableName)
-	if store == nil {
-		util.PrintError("Failed to get the data store: " + store.Name())
+	s, err := stores.Use(databaseName)
+	if err != nil {
+		util.PrintError("Failed to get the data store: " + s.NginxLogStore.Name())
 	}
 
-	logs, err := store.GetAllLogs()
+	logs, err := s.NginxLogStore.GetLogByID(104124)
 	if err != nil {
 		util.PrintError("Failed to get all logs: " + err.Error())
 	}
