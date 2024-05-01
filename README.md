@@ -27,54 +27,9 @@ Bivrost is configured using a simple configuration file, which is written in YAM
 
 ### Configuration Example
 
-This will have to be revised as the project progresses.
+We've chosen YAML for our configuration. YAML is a human-readable data serialization standard and it used by both Docker and the Grafana stack. Using it does not only make sense in a technical way, but also in a holistic way.
 
-```json
-{
-    "sources": [
-        {
-            "name": "siem logs",
-            "type": "directory",
-            "location": "/var/log/siem",
-            "format": "json",
-            "tags": ["siem", "logs"]
-        },
-        {
-            "name": "syslog",
-            "type": "service",
-            "location": " ",
-            "format": "json",
-            "tags": ["syslog", "logs"]
-        },
-        {
-            "name": "threat intel",
-            "type": "module",
-            "location": "/path/to/module/output",
-            "format": "json",
-            "tags": ["intel", "module"]
-        },
-        {
-            "name": "thevalve",
-            "type": "module",
-            "location": " ",
-            "format": "raw",
-            "tags": ["credentials", "module"]
-        },
-        {
-            "name": "<user-defined-name>",
-            "type": "<'module', 'logtype', 'directory', 'service'>",
-            "location": " ",
-            "format": "<'json', 'raw', 'ascii'>",
-            "tags": ["credentials", "module"]
-        }
-    ],
-    "<some-other-key?>": "<?>"
-}
-```
-
-We might need to evaluate if YAML simply is better for our purpose, considering the config file will be used by users that might find this format more intuitive.
-> We decided to go with YAML 👍
-
+#### Bridge Configuration
 ```yaml
 # YAML also supports comments, which means we can guide the user through the configuration file.
 sources:
@@ -126,6 +81,20 @@ users_database:
 
 ```
 
+#### Module Configuration
+
+```yaml
+name: Module Name
+identifier: MODN
+database:
+  path: ./thri_db.sqlite  # If the module requires its own database. Relative path.
+data_sources:             # The sources will be based on the bridge database schema
+  - name: nginx_logs      # Table name
+    type: logs            # Descriptive type
+    location: logs.db     # Database name
+    format: json          # Format of the data as sent to the bridge (marshalled / byte array)
+```
+
 ## Usage
 
 Bivrost is designed to be easy to use and to require minimal configuration. It is designed to be self-contained and to require no dependencies.
@@ -170,24 +139,12 @@ Bivrost is integrated with [TheValve](https://github.com/pynezz/thevalve), where
 
 - [Go Fiber](https://gofiber.io/)
 - [go-sqlite3](https://github.com/mattn/go-sqlite3)
+- [gorm](https://gorm.io/)
 
 ## Requirements for compiling
 
 - Go version > 1.21
 - gcc *(for go-sqlite3 as it requires cgo)*
-
-### Protobuf
-
-- [Protocol Buffers](https://developers.google.com/protocol-buffers)
-
-```bash
-go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
-```
-
-```bash
-go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-```
-
 
 ## License
 
