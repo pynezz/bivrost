@@ -124,7 +124,8 @@ func Execute() {
 
 	// nginxLogPath := "/var/log/nginx/access.log"
 	// Fetch and parse the logs
-	go logalyzer(dataChan, lineChan, "/home/xkali/standard.log", s.NginxLogStore)
+	logPath := "nginx_50.log"
+	go logalyzer(dataChan, lineChan, logPath, s.NginxLogStore)
 	// nginxLogWorker(nginxLogStore, lineChan, logChan)
 
 	// Parse the command line arguments (flags)

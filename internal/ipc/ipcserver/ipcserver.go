@@ -153,13 +153,18 @@ func (s *IPCServer) InitServerSocket() bool {
 // Creates a new listener on the socket path (which should be set in the config in the future)
 func (s *IPCServer) Listen() {
 	util.PrintColorBold(util.DarkGreen, "🎉 IPC server running!")
-
-	// TODO: As of now, the server will only handle one connection at a time (hopefully fixed now)
-	s.conn, _ = net.Listen(AF_UNIX, s.path)
+	var err error
+	s.conn, err = net.Listen(AF_UNIX, s.path)
+	if err != nil {
+		util.PrintError("Listen(): " + err.Error())
+		return
+	}
 	util.PrintColorf(util.LightCyan, "[SOCKETS] Starting listener on %s", s.path)
 
 	for {
 		util.PrintDebug("Waiting for connection...")
+		util.PrintDebug("Network: " + s.conn.Addr().Network())
+
 		conn, err := s.conn.Accept()
 		util.PrintColorf(util.LightCyan, "[SOCKETS]: New connection from %s", conn.LocalAddr().String())
 
@@ -488,8 +493,9 @@ func tableToModel(tableName string) any {
 
 // WIP: Not tested yet.
 // TODO: Test
-func insertData(databaseName, tableName string, data any) {
+func insertData(databaseName, tableName string, data ipc.GenericData) {
 	// Get the data store
+	d := data["data"].(map[string]interface{})
 
 	s, err := stores.Use(tableName)
 	if err != nil {
@@ -512,28 +518,48 @@ func insertData(databaseName, tableName string, data any) {
 		github.com/pynezz/bivrost/internal/ipc/ipcserver.insertData({0x9f0cbc?, 0x9dfd26?}, {0xc0015bc2d0, 0xc}, {0x96d6a0, 0xc000430690})
 		        /mnt/c/Users/kada
 		*/
-		err := s.AttackTypeStore.InsertLog(data.(models.AttackType))
+
+		var tmpData models.AttackType
+		tmpBytes, err := json.Marshal(d)
+		if err != nil {
+			util.PrintError("Failed to marshal the data: " + err.Error())
+		}
+		err = json.Unmarshal(tmpBytes, &tmpData)
+		if err != nil {
+			util.PrintError("Failed to unmarshal the data: " + err.Error())
+		}
+
+		fmt.Printf("Data: %v\n", tmpData)
+
+		err = s.AttackTypeStore.InsertLog(tmpData)
 		if err != nil {
 			util.PrintError("Failed to insert the data: " + err.Error())
+		} else {
+			util.PrintSuccess("Data inserted successfully")
 		}
+
+		// err := s.AttackTypeStore.InsertLog(d.(models.AttackType))
+		// if err != nil {
+		// 	util.PrintError("Failed to insert the data: " + err.Error())
+		// }
 
 	case models.NGINX_LOGS:
 		return
 	case models.SYN_TRAFFIC:
-		err := s.SynTrafficStore.InsertLog(data.(models.SynTraffic))
-		if err != nil {
-			util.PrintError("Failed to insert the data: " + err.Error())
-		}
+		// err := s.SynTrafficStore.InsertLog(data.(models.SynTraffic))
+		// if err != nil {
+		// 	util.PrintError("Failed to insert the data: " + err.Error())
+		// }
 	case models.GEO_DATA:
-		err := s.GeoDataStore.InsertLog(data.(models.GeoData))
-		if err != nil {
-			util.PrintError("Failed to insert the data: " + err.Error())
-		}
+		// err := s.GeoDataStore.InsertLog(data.(models.GeoData))
+		// if err != nil {
+		// 	util.PrintError("Failed to insert the data: " + err.Error())
+		// }
 	case models.GEO_LOCATION_DATA:
-		err := s.GeoLocationDataStore.InsertLog(data.(models.GeoLocationData))
-		if err != nil {
-			util.PrintError("Failed to insert the data: " + err.Error())
-		}
+		// err := s.GeoLocationDataStore.InsertLog(data.(models.GeoLocationData))
+		// if err != nil {
+		// 	util.PrintError("Failed to insert the data: " + err.Error())
+		// }
 	default:
 		util.PrintError("Table not found: " + tableName)
 	}

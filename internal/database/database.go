@@ -157,7 +157,9 @@ func (s *DataStore[T]) insertBatch(batch []models.NginxLog) int {
 		util.PrintError("Failed to insert batch: " + result.Error.Error())
 	}
 
-	util.PrintSuccess("Inserted batch of size: " + fmt.Sprintf("%d", len(batch)) + " into table: " + s.name + " of type " + fmt.Sprintf("%T", batch[0]))
+	util.PrintSuccess("Inserted batch of size: " + fmt.Sprintf("%d", len(batch)) +
+		" into table: " + s.name +
+		" of type " + fmt.Sprintf("%T", batch[0]))
 
 	resString := fmt.Sprintf("SQL: %s\n", result.Statement.SQL.String())
 	util.PrintColorAndBg(util.LightGreen, util.BgGray, resString)
@@ -175,7 +177,8 @@ func (s *DataStore[T]) InsertBulk(logChan <-chan models.NginxLog) error {
 
 	go func() {
 
-		// TODO: Fix close channel so that we can insert the rest of the logs (no worries for now, it will still insert them when it reaches 100 logs in the buffer)
+		// TODO: Fix close channel so that we can insert the rest of the logs
+		// (no worries for now, it will still insert them when it reaches 100 logs in the buffer)
 		defer close(done)
 		for log := range logChan {
 			counter++

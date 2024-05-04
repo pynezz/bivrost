@@ -199,6 +199,8 @@ func (db *Database) Connect(dbPath string) (*Database, error) {
 			return nil, err
 		}
 	}
+
+	util.PrintSuccess("Connected to the database.")
 	// testPrintRows(DBInstance)
 	return DBInstance, nil
 }
