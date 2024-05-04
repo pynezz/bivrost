@@ -310,6 +310,7 @@ func GetUserAuth(user User, method AuthMethod) {
 		// Get password hash
 		// Compare password hash
 		// Return user
+		fmt.Println("User authenticated with password")
 	}
 
 	if user.AuthMethodID == 2 { // WebAuthn
@@ -317,6 +318,7 @@ func GetUserAuth(user User, method AuthMethod) {
 		// Get webauthn data
 		// Compare webauthn data
 		// Return user
+		fmt.Println("User authenticated with WebAuthn")
 	}
 
 	if user.AuthMethodID == 3 { // Both
@@ -326,6 +328,7 @@ func GetUserAuth(user User, method AuthMethod) {
 		// Get webauthn data
 		// Compare webauthn data
 		// Return user
+		fmt.Println("User authenticated with both password and WebAuthn")
 	}
 }
 

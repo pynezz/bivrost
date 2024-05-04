@@ -65,7 +65,7 @@ func VerifyJWTToken(tokenString string) (*jwt.Token, error) {
 
 	sub := fmt.Sprintf("%f", claims["sub"].(float64))
 	util.PrintDebug("Subject(user): " + sub)
-	aud := fmt.Sprintf("%s", claims["aud"].(string))
+	aud := fmt.Sprintf("%s", claims["aud"])
 	util.PrintDebug("Audience(role): " + aud)
 
 	return token, err

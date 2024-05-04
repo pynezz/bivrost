@@ -22,10 +22,16 @@ type Stores struct {
 	// One store per model (/ table in the/a database)
 }
 
+/*
+results.db
+
+attack_types       geo_location_data  syn_traffics
+geo_data           indicators_logs
+*/
 const (
 	NGINX_LOGS        = "nginx_logs"
 	SYN_TRAFFIC       = "syn_traffics"
-	ATTACK_TYPE       = "attack_type"
+	ATTACK_TYPE       = "attack_types"
 	INDICATORS_LOG    = "indicators_logs"
 	GEO_LOCATION_DATA = "geo_location_data"
 	GEO_DATA          = "geo_data"
@@ -39,28 +45,33 @@ func new(logDB, moduleDataDB *gorm.DB) (*Stores, error) {
 	util.PrintInfo("Initializing stores...")
 
 	util.PrintInfo("Initializing nginx_logs store...")
-	nginxLogStore, err := database.NewDataStore[models.NginxLog](logDB, "nginx_logs")
+	nginxLogStore, err := database.NewDataStore[models.NginxLog](logDB, NGINX_LOGS)
 	if err != nil {
 		return nil, err
 	}
 
 	util.PrintInfo("Initializing syn_traffic store with table " + "syn_traffic")
-	synTrafficStore, err := database.NewDataStore[models.SynTraffic](logDB, "syn_traffic")
+	synTrafficStore, err := database.NewDataStore[models.SynTraffic](logDB, SYN_TRAFFIC)
 	if err != nil {
 		return nil, err
 	}
 
-	indicatorsLogRepo, err := database.NewDataStore[models.IndicatorsLog](moduleDataDB, "indicatorslog")
+	indicatorsLogRepo, err := database.NewDataStore[models.IndicatorsLog](moduleDataDB, INDICATORS_LOG)
 	if err != nil {
 		return nil, err
 	}
 
-	geoLocationDataRepo, err := database.NewDataStore[models.GeoLocationData](moduleDataDB, "geolocationdata")
+	geoLocationDataRepo, err := database.NewDataStore[models.GeoLocationData](moduleDataDB, GEO_LOCATION_DATA)
 	if err != nil {
 		return nil, err
 	}
 
-	geoDataRepo, err := database.NewDataStore[models.GeoData](moduleDataDB, "geodata")
+	geoDataRepo, err := database.NewDataStore[models.GeoData](moduleDataDB, GEO_DATA)
+	if err != nil {
+		return nil, err
+	}
+
+	attackTypeRepo, err := database.NewDataStore[models.AttackType](moduleDataDB, ATTACK_TYPE)
 	if err != nil {
 		return nil, err
 	}
@@ -69,12 +80,14 @@ func new(logDB, moduleDataDB *gorm.DB) (*Stores, error) {
 	synTrafficStore.Type = models.SynTraffic{}
 	indicatorsLogRepo.Type = models.IndicatorsLog{}
 	geoLocationDataRepo.Type = models.GeoLocationData{}
+	attackTypeRepo.Type = models.AttackType{}
 	geoDataRepo.Type = models.GeoData{}
 
 	util.PrintSuccess("assigned all store types")
 
 	return &Stores{
 		NginxLogStore:        nginxLogStore,
+		AttackTypeStore:      attackTypeRepo,
 		SynTrafficStore:      synTrafficStore,
 		IndicatorsLogStore:   indicatorsLogRepo,
 		GeoLocationDataStore: geoLocationDataRepo,
@@ -95,6 +108,8 @@ func (s *Stores) Get(store string) *Stores {
 		return &Stores{GeoLocationDataStore: s.GeoLocationDataStore}
 	case GEO_DATA:
 		return &Stores{GeoDataStore: s.GeoDataStore}
+	case ATTACK_TYPE:
+		return &Stores{AttackTypeStore: s.AttackTypeStore}
 	default:
 		return nil
 	}
@@ -143,11 +158,12 @@ func ImportAndInit(conf gorm.Config) (*Stores, error) {
 
 func (s *Stores) Export() {
 
-	addToStoreMap("nginx_logs", s.Get("nginx_logs"))
-	addToStoreMap("syn_traffics", s.Get("syn_traffic"))
-	addToStoreMap("indicators", s.Get("indicators"))
-	addToStoreMap("geolocationdata", s.Get("geolocationdata"))
-	addToStoreMap("geodata", s.Get("geodata"))
+	addToStoreMap("nginx_logs", s.Get(NGINX_LOGS))
+	addToStoreMap("syn_traffics", s.Get(SYN_TRAFFIC))
+	addToStoreMap("indicators", s.Get(INDICATORS_LOG))
+	addToStoreMap("geolocationdata", s.Get(GEO_LOCATION_DATA))
+	addToStoreMap("geodata", s.Get(GEO_DATA))
+	addToStoreMap("attack_types", s.Get(ATTACK_TYPE))
 
 	util.PrintSuccess("Imported all stores")
 

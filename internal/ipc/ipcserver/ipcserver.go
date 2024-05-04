@@ -281,6 +281,26 @@ func parseVerb(msg ipc.GenericData) string {
 	return v
 }
 
+func getModel(tableName string) any {
+	for range models.GetModels() {
+		switch tableName {
+		case models.ATTACK_TYPE:
+			return models.AttackType{}
+		case models.NGINX_LOGS:
+			return models.NginxLog{}
+		case models.SYN_TRAFFIC:
+			return models.SynTraffic{}
+		case models.GEO_DATA:
+			return models.GeoData{}
+		case models.GEO_LOCATION_DATA:
+			return models.GeoLocationData{}
+		default:
+			return nil
+		}
+	}
+	return nil
+}
+
 func parseData(msg *ipc.IPCMessage) ipc.GenericData {
 	var data ipc.GenericData
 
@@ -300,9 +320,9 @@ func parseData(msg *ipc.IPCMessage) ipc.GenericData {
 		} else {
 			fmt.Printf("Data: %v\n", data)
 		}
-
-		// Get the
-		handleGenericData(msg.Data)
+		// getModel(msg.Data["Model"].(string))
+		// Get the model based on the table name
+		// handleGenericData(msg.Data)
 
 	case ipc.DATA_YAML:
 		// Parse the YAML data
@@ -333,7 +353,7 @@ func parseData(msg *ipc.IPCMessage) ipc.GenericData {
 	return data
 }
 
-func handleGenericData(data any) {
+func handleGenericData(dataType any) {
 	// Handle the data
 	fmt.Println("Handling generic data...")
 
@@ -484,6 +504,14 @@ func insertData(databaseName, tableName string, data any) {
 	case models.ATTACK_TYPE:
 		// Insert the data into the database
 		util.PrintDebug("Inserting data into the database...")
+		/* ERROR
+				[DEBUG] Inserting data into the database...
+		panic: interface conversion: interface {} is ipc.GenericData, not models.AttackType
+
+		goroutine 10 [running]:
+		github.com/pynezz/bivrost/internal/ipc/ipcserver.insertData({0x9f0cbc?, 0x9dfd26?}, {0xc0015bc2d0, 0xc}, {0x96d6a0, 0xc000430690})
+		        /mnt/c/Users/kada
+		*/
 		err := s.AttackTypeStore.InsertLog(data.(models.AttackType))
 		if err != nil {
 			util.PrintError("Failed to insert the data: " + err.Error())
