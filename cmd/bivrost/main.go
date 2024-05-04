@@ -67,6 +67,9 @@ func Execute() {
 		return
 	}
 
+	// util.PrintDebug("Testing Sigma rules...")
+	// sigma.Test()
+
 	// nginxDB, err := fetcher.ReadDB("logs")
 	gormConf := gorm.Config{
 		PrepareStmt:     true,

@@ -2,6 +2,7 @@ package ipc
 
 import (
 	"fmt"
+	"sync"
 )
 
 type IPCRequest struct {
@@ -64,6 +65,12 @@ type Database struct {
 type GetJSON struct {
 	Metadata    Metadata `json:"metadata"`
 	Description string   `json:"description"`
+}
+
+type ModuleState struct {
+	LastRowID int
+	// Add any other module-specific state here
+	sync.RWMutex
 }
 
 // ----------------------------

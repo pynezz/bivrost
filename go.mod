@@ -15,18 +15,17 @@ require (
 )
 
 require (
-	github.com/PaesslerAG/gval v1.0.0 // indirect
-	github.com/PaesslerAG/jsonpath v0.1.1 // indirect
-	github.com/alecthomas/participle v0.7.1 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
+	github.com/kr/text v0.2.0 // indirect
 	github.com/mitchellh/go-wordwrap v0.0.0-20150314170334-ad45545899c7 // indirect
+	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
 	github.com/nsf/termbox-go v0.0.0-20190121233118-02980233997d // indirect
+	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
 )
 
 require (
 	github.com/andybalholm/brotli v1.1.0 // indirect
-	github.com/bradleyjkemp/sigma-go v0.6.5
 	github.com/fasthttp/websocket v1.5.8 // indirect
 	github.com/fsnotify/fsnotify v1.7.0
 	github.com/gizak/termui/v3 v3.1.0

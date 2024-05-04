@@ -22,6 +22,7 @@ type Store[T any] interface {
 	InsertLog(log T) error
 	GetAllLogs() ([]T, error)
 	GetLogByID(id uint) (*T, error)
+	GetLogRangeFromID(from int) ([]T, error)
 	UpdateLog(log T) error
 	DeleteLog(id uint) error
 }

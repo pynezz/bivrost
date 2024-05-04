@@ -3,6 +3,7 @@ package ipcserver
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
@@ -45,15 +46,18 @@ var IPCID []byte
  * Types for the IPC communication between the connector and the other modules.
  */
 type IPCServer struct {
-	path       string
-	identifier string
-	conn       net.Listener
+	path         string
+	identifier   string
+	conn         net.Listener
+	moduleStates map[string]*ipc.ModuleState
 }
 
 func init() {
 	MODULEIDENTIFIERS = map[string][]byte{}
 }
 
+// LoadModules loads the modules from the given file
+// It will parse the config file and add the modules to the server map
 func LoadModules(path string) {
 	if !fsutil.FileExists(path) {
 		util.PrintError("LoadModules(): File does not exist: " + path)
@@ -101,12 +105,15 @@ func NewIPCServer(name string, identifier string) *IPCServer {
 	ipc.SetIPCID(IPCID)
 	SetServerIdentifier(IPCID)
 
+	moduleStates := make(map[string]*ipc.ModuleState)
+
 	util.PrintColorf(util.LightCyan, "[SOCKETS] IPC server path: %s", path)
 
 	return &IPCServer{
-		path:       path,
-		identifier: identifier,
-		conn:       nil,
+		path:         path,
+		identifier:   identifier,
+		conn:         nil,
+		moduleStates: moduleStates,
 	}
 }
 
@@ -394,8 +401,10 @@ func (s *IPCServer) handleConnection(c net.Conn) {
 
 				// Ask database for the data
 				// TODO: Remember to make sure only the latest data is fetched
-				latestData := fetchLatestLogData(databaseName, tableName)
-				if latestData == nil {
+				// ctx := context.WithValue(*s.ctx, "tableName", 0) // TODO: <- Add row id here
+				ctx := context.WithValue(context.Background(), "moduleStates", s.moduleStates)
+				latestData := fetchLatestLogData(ctx, tableName)
+				if latestData.data == nil {
 					util.PrintError("Source not found")
 					response = []byte("Error, source not found")
 					// Respond with an error
@@ -403,7 +412,7 @@ func (s *IPCServer) handleConnection(c net.Conn) {
 
 				} else {
 					// Get the logs
-					response = latestData
+					response = latestData.data
 					// Respond with the data
 					util.PrintSuccess("Data fetched successfully")
 				}
@@ -502,8 +511,25 @@ func insertData(databaseName, tableName string, data any) {
 	}
 }
 
+type LogData struct {
+	lastRowID int
+	data      []byte
+}
+
 // TODO: FORTSETT HER
-func fetchLatestLogData(databaseName, tableName string) []byte {
+func fetchLatestLogData(ctx context.Context, tableName string) LogData {
+	moduleStatesMap, ok := ctx.Value("moduleStates").(map[string]*ipc.ModuleState)
+	if !ok {
+		// Handle the case where the value is not a map[string]*ModuleState
+		return LogData{}
+	}
+
+	moduleState, ok := moduleStatesMap[tableName]
+	if !ok {
+		// Create a new ModuleState for this table
+		moduleState = &ipc.ModuleState{}
+		moduleStatesMap[tableName] = moduleState
+	}
 	// Get the data from the database
 	util.PrintDebug("Fetching the latest log data...")
 	s, err := stores.Use(tableName)
@@ -511,23 +537,37 @@ func fetchLatestLogData(databaseName, tableName string) []byte {
 		util.PrintError("Failed to get the data store: " + s.NginxLogStore.Name())
 	}
 
+	// Use a read lock to safely read the LastRowID
+	moduleState.RLock()
+	lastRowID := moduleState.LastRowID
+	moduleState.RUnlock()
+
 	util.PrintDebug("Getting the data store...")
 
-	logs, err := s.NginxLogStore.GetLogByID(10)
+	logs, err := s.NginxLogStore.GetLogRangeFromID(lastRowID)
 	if err != nil {
 		util.PrintError("Failed to get all logs: " + err.Error())
 	}
 
 	util.PrintDebug("Getting all logs...")
 
-	ret, err := json.Marshal(&logs)
+	returnData := LogData{
+		lastRowID: lastRowID,
+		data:      nil,
+	}
+
+	returnData.data, err = json.Marshal(&logs)
 	if err != nil {
 		util.PrintError("Failed to marshal the logs: " + err.Error())
 	}
 
 	fmt.Printf("Logs: %v\n", logs)
 
-	return ret
+	moduleState.Lock()
+	moduleState.LastRowID = len(logs)
+	moduleState.Unlock()
+
+	return returnData
 }
 
 func getResource(mc *modules.ModuleConfig) string {

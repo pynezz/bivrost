@@ -209,6 +209,13 @@ func (s *DataStore[T]) GetAllLogs() ([]T, error) {
 	return logs, result.Error
 }
 
+// GetLatestLogs returns the logs with row ID greater than the given ID from the database
+func (s *DataStore[T]) GetLogRangeFromID(from int) ([]T, error) {
+	var logs []T
+	result := s.db.Where("id > ?", from-1).Find(&logs)
+	return logs, result.Error
+}
+
 // GetEntriesByIP returns all logs with the given
 func (s *DataStore[T]) GetLogsByIP(ip string) ([]T, error) {
 	var entries []T
