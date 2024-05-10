@@ -1,4 +1,4 @@
-package main
+package cmd
 
 import (
 	"fmt"
@@ -8,7 +8,7 @@ import (
 	"github.com/pynezz/bivrost/cmd/bivrost"
 )
 
-func main() {
+func Execute() {
 	path, err := os.Getwd()
 	if err != nil {
 		panic(err)

@@ -1,7 +1,7 @@
-package cmd
+package main
 
-import "github.com/pynezz/bivrost/cmd/bivrost"
+import "github.com/pynezz/bivrost/cmd"
 
 func Execute() {
-	bivrost.Execute()
+	cmd.Execute()
 }
