@@ -128,7 +128,7 @@ func Execute() {
 		fmt.Println(err)
 	}
 
-	fmt.Println("ID 1 log: ", idOneLog)
+	fmt.Println("ID 1 log: ", idOneLog[0])
 
 	// nginxLogPath := "/var/log/nginx/access.log"
 	// Fetch and parse the logs

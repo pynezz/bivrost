@@ -86,12 +86,12 @@ func AsciiArt() string {
 
 // Should be used in conjunction with the util package for proper formatting
 func (h *HeaderStruct) ColorHeader(color string) string {
-	return util.ColorF(color, h.Content)
+	return util.ColorF(color, h.Content, h.Version)
 }
 
 func (h *HeaderStruct) PrintHeader() {
 	if h.Color != "" {
-		fmt.Println(h.ColorHeader(h.Color), h.Version)
+		fmt.Println(h.ColorHeader(h.Color))
 	} else {
 		fmt.Println(Header.Content, h.Version)
 	}
@@ -103,8 +103,7 @@ func gitCommits() string {
 	if err != nil {
 		log.Fatalf("failed to get git commit count: %v", err)
 	}
-
-	return fmt.Sprintf("%d", version)
+	return fmt.Sprintf("%s\n", version)
 }
 
 func NewTui() *Tui {
