@@ -3,6 +3,7 @@ package flags
 import (
 	"flag"
 	"fmt"
+	"os"
 
 	"github.com/pynezz/bivrost/internal/util"
 	"github.com/pynezz/bivrost/pkg/version"
@@ -24,7 +25,8 @@ var (
 
 	// logPathL *string
 	// logPathS *string
-	// logPath *string
+	logPath  *string
+	logPathL *string
 
 	Params Arguments
 
@@ -37,13 +39,14 @@ Options:
   -v, --version    		Print version information
   -h, --help       		Print this help message
   -c, --config PATH		Path to the configuration file
-  -f, --file PATH		Path to the log file to watch
+  -watch PATH			Path to the log file to watch
 
-  --test <param>        Used for testing purposes`
+  --test <param>        Used for testing purposes
+
+  Example:
+  bivrost -c config.yaml -w /var/log/nginx/access.log`
 
 func init() {
-
-	var Params Arguments
 
 	flag.Usage = func() {
 		fmt.Println(usage)
@@ -58,12 +61,13 @@ func init() {
 	configPathL = flag.String("config", "config.yaml", "Path to the configuration file")
 	configPathS = flag.String("c", "", "")
 
-	Params.LogPath = flag.String("watch", "", "Path to the log file to watch")
+	logPath = flag.String("watch", "", "Path to the log file to watch")
 
 	testFlag := flag.String("test", "", "Used for testing purposes")
 
 	Params.Test = testFlag
 	Params.ConfigPath = configPathL // Default value of "config.yaml" (will be overwritten if the flag is set)
+	Params.LogPath = logPath        // Default value of "/var/log/nginx/standard.log" (will be overwritten if the flag is set)
 	// Params.LogPath = logPathL       // Default value of "" (will be overwritten if the flag is set)
 	// --test
 
@@ -84,6 +88,7 @@ func ParseFlags() *Arguments {
 		flag.Usage()
 	}
 
+	fmt.Printf("Flags: %v\n", flag.NFlag())
 	// for _, arg := range flag.Args() {
 	// 	util.PrintDebug("Unused argument arg: " + arg)
 	// 	select {
@@ -97,8 +102,10 @@ func ParseFlags() *Arguments {
 	switch {
 	case helpFlag:
 		flag.Usage()
+		os.Exit(0)
 	case versionFlag:
 		fmt.Println(version.Info())
+		os.Exit(0)
 
 	case *configPathL != "" || *configPathS != "":
 		if *configPathL != "" {

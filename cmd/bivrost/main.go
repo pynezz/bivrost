@@ -71,7 +71,9 @@ func Execute() {
 	}
 
 	// Parse the command line arguments (flags)
-	flags.ParseFlags()
+	args := flags.ParseFlags()
+	util.PrintInfo(" > Config path: " + *args.ConfigPath)
+	util.PrintInfo(" > Log path: " + *args.LogPath)
 
 	// util.PrintDebug("Testing Sigma rules...")
 	// sigma.Test()
@@ -133,8 +135,8 @@ func Execute() {
 	// nginxLogPath := "/var/log/nginx/access.log"
 	// Fetch and parse the logs
 	logPath := "nginx_50.log"
-	if *flags.Params.LogPath != "" {
-		logPath = *flags.Params.LogPath
+	if *args.LogPath != "" {
+		logPath = *args.LogPath
 	}
 
 	go logalyzer(dataChan, lineChan, logPath, s.NginxLogStore)
