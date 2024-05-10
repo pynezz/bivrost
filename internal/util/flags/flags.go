@@ -10,6 +10,7 @@ import (
 
 type Arguments struct {
 	ConfigPath *string
+	LogPath    *string
 	Test       *string
 }
 
@@ -20,6 +21,9 @@ var (
 
 	configPathL *string
 	configPathS *string
+
+	logPathL *string
+	logPathS *string
 
 	Params Arguments
 
@@ -32,6 +36,7 @@ Options:
   -v, --version    		Print version information
   -h, --help       		Print this help message
   -c, --config PATH		Path to the configuration file
+  -f, --file PATH		Path to the log file to watch
 
   --test <param>        Used for testing purposes`
 
@@ -48,11 +53,15 @@ func init() {
 
 	configPathL = flag.String("config", "config.yaml", "Path to the configuration file")
 	configPathS = flag.String("c", "", "")
+
+	logPathL = flag.String("file", "", "Path to the log file to watch")
+	logPathS = flag.String("f", "", "")
+
 	testFlag := flag.String("test", "", "Used for testing purposes")
 
 	Params.Test = testFlag
 	Params.ConfigPath = configPathL // Default value of "config.yaml" (will be overwritten if the flag is set)
-
+	Params.LogPath = logPathL       // Default value of "" (will be overwritten if the flag is set)
 	// --test
 
 }
@@ -68,22 +77,36 @@ func init() {
 func ParseFlags() *Arguments {
 	flag.Parse()
 
-	switch {
-	case helpFlag:
-		flag.Usage()
-	case versionFlag:
-		fmt.Println(version.Info())
-	case *configPathL != "" || *configPathS != "":
-		if *configPathL != "" {
-			Params.ConfigPath = configPathL
-		} else {
-			Params.ConfigPath = configPathS
+	for _, arg := range flag.Args() {
+		util.PrintDebug("Unused argument arg: " + arg)
+		switch {
+		case helpFlag:
+			flag.Usage()
+			break
+		case versionFlag:
+			fmt.Println(version.Info())
+
+		case *configPathL != "" || *configPathS != "":
+			if *configPathL != "" {
+				Params.ConfigPath = configPathL
+			} else {
+				Params.ConfigPath = configPathS
+			}
+
+		case *logPathL != "" || *logPathS != "":
+			if *logPathL != "" {
+				Params.LogPath = logPathL
+			} else {
+				Params.LogPath = logPathS
+			}
+
+		case *testFlag != "":
+			util.PrintWarning("Test flag is set: " + *testFlag)
+			Params.Test = testFlag
+
+		default:
+			util.PrintWarning("This should not happen. Please report this issue.") // It should be taken care of in main.go
 		}
-	case *testFlag != "":
-		util.PrintWarning("Test flag is set: " + *testFlag)
-		Params.Test = testFlag
-	default:
-		util.PrintWarning("This should not happen. Please report this issue.") // It should be taken care of in main.go
 	}
 
 	return &Params

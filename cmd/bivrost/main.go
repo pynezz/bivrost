@@ -67,6 +67,9 @@ func Execute() {
 		return
 	}
 
+	// Parse the command line arguments (flags)
+	flags.ParseFlags()
+
 	// util.PrintDebug("Testing Sigma rules...")
 	// sigma.Test()
 
@@ -127,9 +130,6 @@ func Execute() {
 	logPath := "nginx_50.log"
 	go logalyzer(dataChan, lineChan, logPath, s.NginxLogStore)
 	// nginxLogWorker(nginxLogStore, lineChan, logChan)
-
-	// Parse the command line arguments (flags)
-	flags.ParseFlags()
 
 	// Load the config
 	cfg, err := config.LoadConfig(*flags.Params.ConfigPath)
