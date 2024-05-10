@@ -25,8 +25,7 @@ var (
 
 	// logPathL *string
 	// logPathS *string
-	logPath  *string
-	logPathL *string
+	logPath *string
 
 	Params Arguments
 
@@ -82,7 +81,6 @@ func init() {
 // }
 
 func ParseFlags() *Arguments {
-	flag.Parse()
 
 	if flag.NFlag() == 0 {
 		flag.Usage()

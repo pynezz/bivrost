@@ -41,8 +41,7 @@ import (
 // 7. It initializes the Fiber server with the configuration values.
 // 8. It sets the port to 3000 if the configuration file does not specify a port.
 
-func Execute() {
-	util.PrintDebug("Starting the application...")
+func Execute(isPackage bool) {
 
 	// Setting up signal handling to catch CTRL+C and other termination signals
 	sigChan := make(chan os.Signal, 1)
@@ -71,6 +70,10 @@ func Execute() {
 	}
 
 	// Parse the command line arguments (flags)
+	if !isPackage {
+		flag.Parse()
+	}
+
 	args := flags.ParseFlags()
 	util.PrintInfo(" > Config path: " + *args.ConfigPath)
 	util.PrintInfo(" > Log path: " + *args.LogPath)
@@ -129,8 +132,11 @@ func Execute() {
 	if err != nil {
 		fmt.Println(err)
 	}
-
-	fmt.Println("ID 1 log: ", idOneLog[0])
+	if len(idOneLog) == 0 {
+		fmt.Println("No logs found for IP: ", randIP)
+	} else {
+		fmt.Println("ID 1 log: ", idOneLog[0])
+	}
 
 	// nginxLogPath := "/var/log/nginx/access.log"
 	// Fetch and parse the logs
