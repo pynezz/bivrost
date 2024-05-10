@@ -148,6 +148,7 @@ func Execute(isPackage bool) {
 	go logalyzer(dataChan, lineChan, logPath, s.NginxLogStore)
 	// nginxLogWorker(nginxLogStore, lineChan, logChan)
 
+	util.PrintDebug("Config path: " + *args.ConfigPath)
 	// Load the config
 	cfg, err := config.LoadConfig(*flags.Params.ConfigPath)
 	if err != nil {
