@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"log"
+	"os/exec"
 	"time"
 
 	ui "github.com/gizak/termui/v3"
@@ -96,9 +97,21 @@ func (h *HeaderStruct) PrintHeader() {
 	}
 }
 
+func gitCommits() string {
+	cmd := exec.Command("git", "rev-list", "--count", "HEAD")
+	version, err := cmd.Output()
+	if err != nil {
+		log.Fatalf("failed to get git commit count: %v", err)
+	}
+
+	return fmt.Sprintf("%d", version)
+}
+
 func NewTui() *Tui {
+	h := Header
+	h.Version = fmt.Sprintf("v.0.2.%s", gitCommits())
 	return &Tui{
-		Header: Header,
+		Header: h,
 	}
 }
 

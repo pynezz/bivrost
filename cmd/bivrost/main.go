@@ -42,6 +42,7 @@ import (
 // 8. It sets the port to 3000 if the configuration file does not specify a port.
 
 func Execute() {
+	util.PrintDebug("Starting the application...")
 
 	// Setting up signal handling to catch CTRL+C and other termination signals
 	sigChan := make(chan os.Signal, 1)
@@ -55,6 +56,8 @@ func Execute() {
 
 	termiui := tui.NewTui()
 	termiui.Header.Color = util.Cyan
+	termiui.Header.PrintHeader()
+
 	// go termiui.Display()
 	// Create a channel to receive the log data
 	// termiui.AddDataSource(dataChan, "Watcher Output", util.Yellow) // Adding the file watcher output as a data source to the TUI
@@ -118,7 +121,9 @@ func Execute() {
 		fmt.Println(err)
 	}
 
-	idOneLog, err := s.Get("nginx_logs").NginxLogStore.GetLogsByIP("")
+	// Random IP for testing: 143.110.222.166
+	randIP := "143.110.222.166"
+	idOneLog, err := s.Get("nginx_logs").NginxLogStore.GetLogsByIP(randIP)
 	if err != nil {
 		fmt.Println(err)
 	}
