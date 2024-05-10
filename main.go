@@ -1,4 +1,5 @@
-package main
+// package main
+package bivrost
 
 import "github.com/pynezz/bivrost/cmd"
 
