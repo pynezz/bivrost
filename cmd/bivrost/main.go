@@ -128,6 +128,10 @@ func Execute() {
 	// nginxLogPath := "/var/log/nginx/access.log"
 	// Fetch and parse the logs
 	logPath := "nginx_50.log"
+	if *flags.Params.LogPath != "" {
+		logPath = *flags.Params.LogPath
+	}
+
 	go logalyzer(dataChan, lineChan, logPath, s.NginxLogStore)
 	// nginxLogWorker(nginxLogStore, lineChan, logChan)
 

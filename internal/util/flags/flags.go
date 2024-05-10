@@ -82,7 +82,6 @@ func ParseFlags() *Arguments {
 		switch {
 		case helpFlag:
 			flag.Usage()
-			break
 		case versionFlag:
 			fmt.Println(version.Info())
 
