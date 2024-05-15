@@ -60,6 +60,7 @@ type Object struct {
 type Database struct {
 	Name  string `json:"name"`
 	Table string `json:"table"`
+	RowID string `json:"row_id"` // Row ID - fetch anything after this ID
 }
 
 type GetJSON struct {

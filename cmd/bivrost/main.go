@@ -192,6 +192,7 @@ func Execute(isPackage bool) {
 	// Meaning that the database will be closed when the application is closed.
 	defer db.Driver.Close()
 
+	// TODO: When done - move this to the bottom of the function
 	<-sigChan
 
 	port := 3000
