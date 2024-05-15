@@ -594,10 +594,10 @@ func insertData(databaseName, tableName string, data ipc.GenericData) {
 	}
 }
 
-// Parsing into this object from a "Lo"
+// Parsing into this object from a "LogEntry" struct
 type LogData struct {
 	lastRowID int
-	data      []byte
+	data      []byte // LogEntry struct
 }
 
 // TODO: FORTSETT HER
@@ -605,6 +605,7 @@ func fetchLatestLogData(ctx context.Context, tableName string) LogData {
 	moduleStatesMap, ok := ctx.Value("moduleStates").(map[string]*ipc.ModuleState)
 	if !ok {
 		// Handle the case where the value is not a map[string]*ModuleState
+		util.PrintDebug(" [modulestate] failed to get the module states map")
 		return LogData{}
 	}
 
@@ -615,10 +616,10 @@ func fetchLatestLogData(ctx context.Context, tableName string) LogData {
 		moduleStatesMap[tableName] = moduleState
 	}
 	// Get the data from the database
-	util.PrintDebug("Fetching the latest log data...")
+	util.PrintDebug(" [modulestate] fetching the latest log data...")
 	s, err := stores.Use(tableName)
 	if err != nil {
-		util.PrintError("Failed to get the data store: " + s.NginxLogStore.Name())
+		util.PrintError(" [modulestate] failed to get the data store: " + s.NginxLogStore.Name())
 	}
 
 	// Use a read lock to safely read the LastRowID
@@ -628,12 +629,12 @@ func fetchLatestLogData(ctx context.Context, tableName string) LogData {
 
 	util.PrintDebug("Getting the data store...")
 
-	logs, err := s.NginxLogStore.GetLogRangeFromID(lastRowID)
+	logs, err := s.NginxLogStore.GetLogRangeFromID(lastRowID) // The store is also an issue here....
 	if err != nil {
-		util.PrintError("Failed to get all logs: " + err.Error())
+		util.PrintError("[modulestate] failed to get all logs: " + err.Error())
 	}
 
-	util.PrintDebug("Getting all logs...")
+	util.PrintDebug(" [modulestate] getting all logs starting with " + fmt.Sprintf("%d", lastRowID) + "...")
 
 	returnData := LogData{
 		lastRowID: lastRowID,
@@ -645,12 +646,11 @@ func fetchLatestLogData(ctx context.Context, tableName string) LogData {
 		util.PrintError("Failed to marshal the logs: " + err.Error())
 	}
 
-	fmt.Printf("Logs: %v\n", logs)
-
 	moduleState.Lock()
-	moduleState.LastRowID = len(logs)
+	moduleState.LastRowID += len(logs) // Also a bug was here (+ len(logs) instead of += len(logs))
 	moduleState.Unlock()
 
+	util.PrintDebug(" [modulestate] Returning the data...")
 	return returnData
 }
 
