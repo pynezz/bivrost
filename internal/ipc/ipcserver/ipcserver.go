@@ -15,6 +15,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/pynezz/bivrost/internal/database"
 	"github.com/pynezz/bivrost/internal/database/models"
 	"github.com/pynezz/bivrost/internal/database/stores"
 	"github.com/pynezz/bivrost/internal/fsutil"
@@ -225,59 +226,57 @@ func parseConnection(c net.Conn) (ipc.IPCRequest, error) {
 
 // Parse the metadata from the message
 // Returns the source, destination, and a boolean indicating if the metadata is nil
-func parseMetadata(msg ipc.GenericData) (ipc.Metadata, bool) {
+func parseMetadata(msg ipc.Metadata) (ipc.Metadata, bool) {
 
 	// TODO: Might be reasonable to implement the Metadata struct here (ipc.Metadata)
-	metadata := msg["metadata"]
-	if metadata == nil {
-		return ipc.Metadata{}, false
-	}
-	source := metadata.(map[string]interface{})["source"].(string)
-	destination := metadata.(map[string]interface{})["destination"].(map[string]interface{})["destination"]
-	destinationId := destination.(map[string]interface{})["id"].(string)
-	destinationName := destination.(map[string]interface{})["name"]
-	destinationInfo := destination.(map[string]interface{})["database"]
+	metadata := msg
 
-	databaseName := destinationInfo.(map[string]interface{})["name"]
-	tableName := destinationInfo.(map[string]interface{})["table"]
+	// source := metadata.(map[string]interface{})["source"].(string)
+	// destination := metadata.(map[string]interface{})["destination"].(map[string]interface{})["destination"]
+	// destinationId := destination.(map[string]interface{})["id"].(string)
+	// destinationName := destination.(map[string]interface{})["name"]
+	// destinationInfo := destination.(map[string]interface{})["database"]
 
-	m := ipc.Metadata{
-		Source: source,
-		Destination: ipc.Destination{
-			Object: ipc.Object{
-				Id:   destinationId,
-				Name: destinationName.(string),
-				Database: ipc.Database{
-					Name:  databaseName.(string),
-					Table: tableName.(string),
-				},
-			},
-		},
-		Method: parseVerb(msg),
-	}
+	// databaseName := destinationInfo.(map[string]interface{})["name"]
+	// tableName := destinationInfo.(map[string]interface{})["table"]
 
-	method := metadata.(map[string]interface{})["method"]
+	// m := ipc.Metadata{
+	// 	Source: source,
+	// 	Destination: ipc.Destination{
+	// 		Object: ipc.Object{
+	// 			Id:   destinationId,
+	// 			Name: destinationName.(string),
+	// 			Database: ipc.Database{
+	// 				Name:  databaseName.(string),
+	// 				Table: tableName.(string),
+	// 			},
+	// 		},
+	// 	},
+	// 	Method: msg.Method,
+	// }
+
+	// method := metadata.(map[string]interface{})["method"]
 
 	v := ""
-	if method == "POST" {
+	if metadata.Method == "POST" {
 		v = "send data to"
-	} else if method == "GET" {
+	} else if metadata.Method == "GET" {
 		v = "get data from"
-	} else if method == "PUT" {
+	} else if metadata.Method == "PUT" {
 		v = "update data in"
-	} else if method == "DELETE" {
+	} else if metadata.Method == "DELETE" {
 		v = "delete data from"
 	} else {
 		v = "???"
 	}
 
-	util.PrintColorf(util.DarkYellow, "Metadata object: %s", m)
+	util.PrintColorf(util.DarkYellow, "Metadata object: %s", metadata)
 
-	sentence := fmt.Sprintf("\n %s wants to %s %s with id %s \n", source, v, destinationName, destinationId)
+	sentence := fmt.Sprintf("\n %s wants to %s %s with id %s \n", metadata.Source, v, metadata.Destination.Object, metadata.Destination.Object.Id)
 	util.PrintBold(sentence)
-	util.PrintItalic("Database name: " + databaseName.(string) + "\nTable name: " + tableName.(string))
+	util.PrintItalic("Database name: " + msg.Destination.Object.Database.Name + "\nTable name: " + metadata.Destination.Object.Database.Table)
 
-	return m, metadata != nil
+	return metadata, true
 }
 
 // Parse the method/verb from the message
@@ -310,8 +309,15 @@ func getModel(tableName string) any {
 	return nil
 }
 
-func parseData(msg *ipc.IPCMessage) ipc.GenericData {
+type JsonResponse struct {
+	Metadata ipc.Metadata `json:"metadata"`
+	Data     interface{}  `json:"data"` //? Wait, I thought this was supposed to be an array of AttackDetail..?
+	Model    string       `json:"model"`
+}
+
+func parseData(msg *ipc.IPCMessage) (ipc.GenericData, JsonResponse) {
 	var data ipc.GenericData
+	var jsonData JsonResponse
 
 	switch msg.Datatype {
 	case ipc.DATA_TEXT:
@@ -323,12 +329,13 @@ func parseData(msg *ipc.IPCMessage) ipc.GenericData {
 		// Parse the JSON data
 		fmt.Println("Data is json / generic data")
 
-		err := json.Unmarshal(msg.Data, &data)
+		err := json.Unmarshal(msg.Data, &jsonData)
 		if err != nil {
-			fmt.Println("Error unmarshaling JSON data:", err)
-		} else {
-			fmt.Printf("Data: %v\n", data)
+			errMsg := fmt.Errorf("error unmarshaling JSON data: %w", err)
+			fmt.Println(errMsg)
 		}
+		return data, jsonData
+
 		// getModel(msg.Data["Model"].(string))
 		// Get the model based on the table name
 		// handleGenericData(msg.Data)
@@ -359,7 +366,7 @@ func parseData(msg *ipc.IPCMessage) ipc.GenericData {
 		fmt.Println("Data is nil")
 	}
 
-	return data
+	return data, jsonData
 }
 
 func handleGenericData(dataType any) {
@@ -385,8 +392,8 @@ func (s *IPCServer) handleConnection(c net.Conn) {
 			break
 		}
 
-		d := parseData(&inboundRequest.Message)
-		if d == nil {
+		_, d := parseData(&inboundRequest.Message) // Should be of type ipc.IPCMessage
+		if len(d.Data.(map[string]interface{})) <= 0 {
 			fmt.Println("Data is nil")
 			return
 		}
@@ -407,11 +414,11 @@ func (s *IPCServer) handleConnection(c net.Conn) {
 		// m := modules.Modules[string(inboundRequest.Header.Identifier[:])]
 
 		// Process the request...
-		util.PrintColorf(util.BgGreen, "Received: %+v\n", inboundRequest)
+		// util.PrintColorf(util.BgGreen, "Received: %+v\n", inboundRequest)
 		var response []byte
 
 		// Parse metadata
-		mData, ok := parseMetadata(d)
+		mData, ok := parseMetadata(d.Metadata)
 		if !ok {
 			util.PrintWarning("Metadata is nil")
 		} else {
@@ -419,6 +426,11 @@ func (s *IPCServer) handleConnection(c net.Conn) {
 
 			// If there is data to fetch, fetch it
 			if mData.Method == "GET" {
+
+				//BUG - 🐞: This seems to be caught in an infinite loop. Adding measures to inspect it with user intervention.
+				// var message string
+				// output := "[🐞] Buggy section ahead! Please read the outputs. press [enter] to continue..."
+				// fmt.Scanln(output, &message)
 
 				util.PrintBold("Got a GET request - fetching data...")
 				// Get the data source
@@ -431,9 +443,14 @@ func (s *IPCServer) handleConnection(c net.Conn) {
 
 				// Ask database for the data
 				// TODO: Remember to make sure only the latest data is fetched
-				// ctx := context.WithValue(*s.ctx, "tableName", 0) // TODO: <- Add row id here
-				ctx := context.WithValue(context.Background(), "moduleStates", s.moduleStates)
+				// ctx := context.WithValue(*s.moduleStates, "tableName", 0) // TODO: <- Add row id here
+				ctx := context.WithValue(context.Background(), tableToModel(tableName), s.moduleStates)
+				val := ctx.Value(tableToModel(tableName))
+
+				fmt.Scanln("[⏸️] context value: ", val)
+
 				latestData := fetchLatestLogData(ctx, tableName)
+
 				if latestData.data == nil {
 					util.PrintError("Source not found")
 					response = []byte("Error, source not found")
@@ -450,15 +467,62 @@ func (s *IPCServer) handleConnection(c net.Conn) {
 			if mData.Method == "POST" {
 				util.PrintBold("Got a POST request - inserting data...")
 				// Insert the data into the database
-				data := d["Data"].([]interface{})
+				// byteData := d["Data"].([]byte)
+				// var logdata []ipc.GetJSON
+
+				// json.Unmarshal(byteData, &d)
+
+				// determineActualType(data)
 
 				databaseName := mData.Destination.Object.Database.Name
 				tableName := mData.Destination.Object.Database.Table
 
-				if data != nil {
-					insertData(databaseName, tableName, d)
+				// wait := make(chan string)
+				// var message string
+				bytes, err := json.Marshal(d)
+				if err != nil {
+					util.PrintError("Failed to marshal the data: " + err.Error())
+				}
+
+				fmt.Println("Data: ", string(bytes[:150]))
+				// fmt.Printf("Data is : %+v \n", d)
+				// m, ok := ipc.GenericData(d["Data"].(map[string]interface{}))
+				// if !ok {
+				// 	return fmt.Errorf("want type map[string]interface{};  got %T", t)
+				// }
+				util.PrintDebug("Key value pairs in the data object: ")
+				field := 0
+				for k, v := range d.Data.(map[string]interface{}) {
+					field++
+					fmt.Println(k, "=>", v)
+				}
+
+				fmt.Println("Field count: ", field)
+				// wait <- message
+
+				if d.Data != nil {
+					switch d.Data.(type) {
+					case []models.AttackType:
+						fmt.Println("Data is of type AttackType")
+						insertData[[]models.AttackType](databaseName, tableName, d.Data.(map[string]interface{}))
+					case []models.NginxLog:
+						fmt.Println("Data is of type NginxLog")
+						insertData[[]models.NginxLog](databaseName, tableName, d.Data.(map[string]interface{}))
+					case []models.SynTraffic:
+						fmt.Println("Data is of type SynTraffic")
+						insertData[[]models.SynTraffic](databaseName, tableName, d.Data.(map[string]interface{}))
+					case []models.GeoData:
+						fmt.Println("Data is of type GeoData")
+						insertData[[]models.GeoData](databaseName, tableName, d.Data.(map[string]interface{}))
+					case []models.GeoLocationData:
+						fmt.Println("Data is of type GeoLocationData")
+						insertData[[]models.GeoLocationData](databaseName, tableName, d.Data.(map[string]interface{}))
+					default:
+						fmt.Println("Data is of unknown type")
+					}
+
 				} else {
-					util.PrintError("Data is nil")
+					util.PrintError(" [handleconnection] Data is nil")
 				}
 			}
 		}
@@ -467,7 +531,6 @@ func (s *IPCServer) handleConnection(c net.Conn) {
 			util.PrintError("handleConnection: " + err.Error())
 			return
 		}
-
 	}
 }
 
@@ -514,13 +577,16 @@ func tableToModel(tableName string) any {
 }
 
 // WIP: ✅ Tested - working
-func insertData(databaseName, tableName string, data ipc.GenericData) {
+func insertData[StoreType any](databaseName, tableName string, data ipc.GenericData) {
 	// Get the data store
 	d := data["data"].([]interface{})
 
 	s, err := stores.Use(tableName)
 	if err != nil {
-		util.PrintError("Failed to get the data store: " + s.NginxLogStore.Name())
+
+		s := &database.DataStore[StoreType]{}
+
+		util.PrintError("Failed to get the data store: " + s.Name())
 	}
 
 	util.PrintDebug("Getting the data store...")
@@ -537,7 +603,7 @@ func insertData(databaseName, tableName string, data ipc.GenericData) {
 
 		goroutine 10 [running]:
 		github.com/pynezz/bivrost/internal/ipc/ipcserver.insertData({0x9f0cbc?, 0x9dfd26?}, {0xc0015bc2d0, 0xc}, {0x96d6a0, 0xc000430690})
-		        /mnt/c/Users/kada
+				/mnt/c/Users/kada
 		*/
 
 		var tmpData []models.AttackType
@@ -550,7 +616,7 @@ func insertData(databaseName, tableName string, data ipc.GenericData) {
 			util.PrintError("Failed to unmarshal the data: " + err.Error())
 		}
 
-		fmt.Printf("Data: %v\n", tmpData)
+		// fmt.Printf("Data: %v\n", tmpData)
 		logsChannel := make(chan models.AttackType)
 		go func() {
 			for _, log := range tmpData {
@@ -602,10 +668,13 @@ type LogData struct {
 
 // TODO: FORTSETT HER
 func fetchLatestLogData(ctx context.Context, tableName string) LogData {
-	moduleStatesMap, ok := ctx.Value("moduleStates").(map[string]*ipc.ModuleState)
+	moduleStatesMap, ok := ctx.Value(tableToModel(tableName)).(map[string]*ipc.ModuleState)
 	if !ok {
 		// Handle the case where the value is not a map[string]*ModuleState
 		util.PrintDebug(" [modulestate] failed to get the module states map")
+
+		fmt.Scanln("Press [Enter] to continue...")
+
 		return LogData{}
 	}
 
@@ -635,6 +704,7 @@ func fetchLatestLogData(ctx context.Context, tableName string) LogData {
 	}
 
 	util.PrintDebug(" [modulestate] getting all logs starting with " + fmt.Sprintf("%d", lastRowID) + "...")
+	fmt.Scanln("Press [Enter] to continue...")
 
 	returnData := LogData{
 		lastRowID: lastRowID,
@@ -649,8 +719,9 @@ func fetchLatestLogData(ctx context.Context, tableName string) LogData {
 	moduleState.Lock()
 	moduleState.LastRowID += len(logs) // Also a bug was here (+ len(logs) instead of += len(logs))
 	moduleState.Unlock()
-
+	util.PrintDebug(" [modulestate] updated the last row ID to " + fmt.Sprintf("%d", moduleState.LastRowID))
 	util.PrintDebug(" [modulestate] Returning the data...")
+	fmt.Scanln("Press [Enter] to continue...")
 	return returnData
 }
 

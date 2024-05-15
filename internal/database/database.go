@@ -139,6 +139,14 @@ func NewDataStore[StoreType any](db *gorm.DB, name string) (*DataStore[StoreType
 	return store, nil
 }
 
+func GetDataStore[StoreType any]() (*DataStore[StoreType], error) {
+	return &DataStore[StoreType]{}, nil
+}
+
+func GetStoreMap() map[string]*DataStore[any] {
+	return stores
+}
+
 // Automigrate given model to the database
 func (s *DataStore[T]) AutoMigrate() error {
 	var instance T
