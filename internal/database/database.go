@@ -151,7 +151,7 @@ func (s *DataStore[T]) InsertLog(log T) error {
 	return result.Error
 }
 
-func (s *DataStore[T]) insertBatch(batch []models.NginxLog) int {
+func (s *DataStore[T]) insertBatch(batch []T) int {
 	result := s.db.Create(&batch)
 	if result.Error != nil {
 		util.PrintError("Failed to insert batch: " + result.Error.Error())
@@ -168,10 +168,15 @@ func (s *DataStore[T]) insertBatch(batch []models.NginxLog) int {
 }
 
 // SQL TEST:  select id, remote_addr, time_local from nginx_logs where remote_addr and time_local is not null LIMIT 10;
-func (s *DataStore[T]) InsertBulk(logChan <-chan models.NginxLog) error {
+func (s *DataStore[T]) InsertBulk(logChan <-chan T, bulkSize int) error {
 	var count int64
-	batchSize := 100
-	buffer := make([]models.NginxLog, 0)
+	var batchSize int
+	if bulkSize == 0 {
+		batchSize = 100
+	}
+	batchSize = bulkSize // Should be a modulo of the amount of logs to insert
+
+	buffer := make([]T, 0)
 	done := make(chan struct{})
 	counter := 0
 
@@ -183,12 +188,12 @@ func (s *DataStore[T]) InsertBulk(logChan <-chan models.NginxLog) error {
 		for log := range logChan {
 			counter++
 			util.PrintColorAndBg(util.White, "\033[40m", "Inserting log: ")
-			util.PrintColor(util.DarkCyan, string(log.ID))
+			// util.PrintColor(util.DarkCyan, string(log.ID))
 			buffer = append(buffer, log)
 			if counter%batchSize == 0 {
 				util.PrintColorAndBg(util.White, util.BgRed, "buffer limit reached, inserting batch...")
 				count += int64(s.insertBatch(buffer))
-				buffer = make([]models.NginxLog, 0)
+				buffer = make([]T, 0)
 			}
 		}
 	}()

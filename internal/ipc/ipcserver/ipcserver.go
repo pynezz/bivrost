@@ -52,6 +52,10 @@ type IPCServer struct {
 	moduleStates map[string]*ipc.ModuleState
 }
 
+func (s *IPCServer) CloseConn() {
+	s.conn.Close()
+}
+
 func init() {
 	MODULEIDENTIFIERS = map[string][]byte{}
 }
@@ -366,7 +370,7 @@ func handleGenericData(dataType any) {
 
 // handleConnection handles the incoming connection
 func (s *IPCServer) handleConnection(c net.Conn) {
-	defer c.Close()
+	// defer c.Close()
 
 	util.PrintColorf(util.LightCyan, "[SOCKETS] Handling connection...")
 
@@ -381,9 +385,10 @@ func (s *IPCServer) handleConnection(c net.Conn) {
 			break
 		}
 
-		d := parseData(&inboundRequest.Message) // TODO: Return this instead
+		d := parseData(&inboundRequest.Message)
 		if d == nil {
 			fmt.Println("Data is nil")
+			return
 		}
 
 		moduleName := modules.Mids.GetModuleName(inboundRequest.Header.Identifier)
@@ -445,29 +450,46 @@ func (s *IPCServer) handleConnection(c net.Conn) {
 			if mData.Method == "POST" {
 				util.PrintBold("Got a POST request - inserting data...")
 				// Insert the data into the database
+				data := d["Data"].([]interface{})
 
 				databaseName := mData.Destination.Object.Database.Name
 				tableName := mData.Destination.Object.Database.Table
-				insertData(databaseName, tableName, d)
+
+				if data != nil {
+					insertData(databaseName, tableName, d)
+				} else {
+					util.PrintError("Data is nil")
+				}
 			}
 		}
 
-		// dest := mData.Source
-
-		// Finally, respond to the client
-		moduleId := string(inboundRequest.Header.Identifier[:]) // TODO: req.Header.Identifier is the server identifier, not the module identifier
-		if crcOk := s.CheckCRC32(inboundRequest); !crcOk {
-			response = []byte("CHKSUM ERROR")
-			break
-		}
-
-		err = s.respond(c, response, moduleId)
-		if err != nil {
+		if err := reply(response, c, inboundRequest, s); err != nil {
 			util.PrintError("handleConnection: " + err.Error())
-			break
+			return
 		}
-		responseTime(inboundRequest.Timestamp)
+
 	}
+}
+
+func reply(response []byte, c net.Conn, inboundRequest ipc.IPCRequest, s *IPCServer) error {
+	// Finally, respond to the client
+	var err error
+
+	moduleId := string(inboundRequest.Header.Identifier[:]) // TODO: req.Header.Identifier is the server identifier, not the module identifier
+	if crcOk := s.CheckCRC32(inboundRequest); !crcOk {
+		response = []byte("CHKSUM ERROR")
+		util.PrintError("Checksum error")
+		return fmt.Errorf(string(response))
+	}
+
+	err = s.respond(c, response, moduleId)
+	if err != nil {
+		util.PrintError("handleConnection: " + err.Error())
+		return err
+	}
+	responseTime(inboundRequest.Timestamp)
+
+	return nil
 }
 
 // Get the model based on the table name
@@ -491,11 +513,10 @@ func tableToModel(tableName string) any {
 	return nil
 }
 
-// WIP: Not tested yet.
-// TODO: Test
+// WIP: ✅ Tested - working
 func insertData(databaseName, tableName string, data ipc.GenericData) {
 	// Get the data store
-	d := data["data"].(map[string]interface{})
+	d := data["data"].([]interface{})
 
 	s, err := stores.Use(tableName)
 	if err != nil {
@@ -519,7 +540,7 @@ func insertData(databaseName, tableName string, data ipc.GenericData) {
 		        /mnt/c/Users/kada
 		*/
 
-		var tmpData models.AttackType
+		var tmpData []models.AttackType
 		tmpBytes, err := json.Marshal(d)
 		if err != nil {
 			util.PrintError("Failed to marshal the data: " + err.Error())
@@ -530,8 +551,16 @@ func insertData(databaseName, tableName string, data ipc.GenericData) {
 		}
 
 		fmt.Printf("Data: %v\n", tmpData)
+		logsChannel := make(chan models.AttackType)
+		go func() {
+			for _, log := range tmpData {
+				logsChannel <- log
+			}
+			close(logsChannel)
 
-		err = s.AttackTypeStore.InsertLog(tmpData)
+		}()
+
+		err = s.AttackTypeStore.InsertBulk(logsChannel, len(tmpData))
 		if err != nil {
 			util.PrintError("Failed to insert the data: " + err.Error())
 		} else {
@@ -565,6 +594,7 @@ func insertData(databaseName, tableName string, data ipc.GenericData) {
 	}
 }
 
+// Parsing into this object from a "Lo"
 type LogData struct {
 	lastRowID int
 	data      []byte

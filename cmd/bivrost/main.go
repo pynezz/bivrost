@@ -263,6 +263,9 @@ func testUDS() {
 
 	util.PrintItalic("Waiting for SIGINT or SIGTERM... Press Ctrl+C to exit.")
 	<-c
+
+	// What a 'clever' naming this was...
+	ipcServer.CloseConn()
 	ipcserver.Cleanup()
 	fmt.Println("Done cleaning up. Exiting...")
 	// uds, err := connector.NewIPC("test", "Test socket")
@@ -322,7 +325,7 @@ func nginxLogWorker(nginxLogStore *database.DataStore[models.NginxLog], logChan 
 	timestamp := util.UnixNanoTimestamp()
 	var finalTime int64
 	util.PrintBold("Processing parsed logs for storage...")
-	if err := nginxLogStore.InsertBulk(logChan); err != nil {
+	if err := nginxLogStore.InsertBulk(logChan, 100); err != nil {
 		util.PrintError("Failed to insert logs: " + err.Error())
 	} else {
 		util.PrintSuccess("Logs inserted successfully.")
@@ -330,7 +333,7 @@ func nginxLogWorker(nginxLogStore *database.DataStore[models.NginxLog], logChan 
 	}
 
 	util.PrintBold("Processing parsed logs for storage...")
-	if err := nginxLogStore.InsertBulk(logChan); err != nil {
+	if err := nginxLogStore.InsertBulk(logChan, 100); err != nil {
 		util.PrintError("Failed to insert logs: " + err.Error())
 	} else {
 		util.PrintSuccess("Logs inserted successfully.")
