@@ -208,20 +208,9 @@ func NewIPCMessage(identifierKey string, messageType byte, data []byte) (*ipc.IP
 // Return the parsed IPCRequest object
 func parseConnection(c net.Conn) (ipc.IPCRequest, error) {
 	var request ipc.IPCRequest
-	// var reqBuffer bytes.Buffer
-	util.PrintDebug("Trying to decode the bytes to a request struct...")
-	util.PrintColorf(util.LightCyan, "Decoding the bytes to a request struct... %v", c)
-
 	decoder := gob.NewDecoder(c)
 	err := decoder.Decode(&request)
-	if err != nil {
-		util.PrintWarning("parseConnection: Error decoding the request: \n > " + err.Error())
-		return request, err
-	}
-
-	fmt.Printf("Message ID: %s\n", string(request.MessageSignature))
-
-	return request, nil
+	return request, err
 }
 
 // Parse the metadata from the message
@@ -388,12 +377,12 @@ func (s *IPCServer) handleConnection(c net.Conn) {
 				util.PrintDebug("Connection closed by client")
 				break
 			}
-			util.PrintError("Error parsing request: " + err.Error())
+			fmt.Println(util.Errorf("Error parsing request: " + err.Error()))
 			break
 		}
 
 		_, d := parseData(&inboundRequest.Message) // Should be of type ipc.IPCMessage
-		if len(d.Data.(map[string]interface{})) <= 0 {
+		if d == *new(JsonResponse) {
 			fmt.Println("Data is nil")
 			return
 		}
@@ -411,10 +400,6 @@ func (s *IPCServer) handleConnection(c net.Conn) {
 		source := fmt.Sprint(modules.Mids.GetModuleIdentifier(moduleName)) // Sorry about this (this should print the identifier of the module that sent the request)
 		fmt.Println("Source: " + source)
 
-		// m := modules.Modules[string(inboundRequest.Header.Identifier[:])]
-
-		// Process the request...
-		// util.PrintColorf(util.BgGreen, "Received: %+v\n", inboundRequest)
 		var response []byte
 
 		// Parse metadata
@@ -465,65 +450,7 @@ func (s *IPCServer) handleConnection(c net.Conn) {
 				}
 			}
 			if mData.Method == "POST" {
-				util.PrintBold("Got a POST request - inserting data...")
-				// Insert the data into the database
-				// byteData := d["Data"].([]byte)
-				// var logdata []ipc.GetJSON
 
-				// json.Unmarshal(byteData, &d)
-
-				// determineActualType(data)
-
-				databaseName := mData.Destination.Object.Database.Name
-				tableName := mData.Destination.Object.Database.Table
-
-				// wait := make(chan string)
-				// var message string
-				bytes, err := json.Marshal(d)
-				if err != nil {
-					util.PrintError("Failed to marshal the data: " + err.Error())
-				}
-
-				fmt.Println("Data: ", string(bytes[:150]))
-				// fmt.Printf("Data is : %+v \n", d)
-				// m, ok := ipc.GenericData(d["Data"].(map[string]interface{}))
-				// if !ok {
-				// 	return fmt.Errorf("want type map[string]interface{};  got %T", t)
-				// }
-				util.PrintDebug("Key value pairs in the data object: ")
-				field := 0
-				for k, v := range d.Data.(map[string]interface{}) {
-					field++
-					fmt.Println(k, "=>", v)
-				}
-
-				fmt.Println("Field count: ", field)
-				// wait <- message
-
-				if d.Data != nil {
-					switch d.Data.(type) {
-					case []models.AttackType:
-						fmt.Println("Data is of type AttackType")
-						insertData[[]models.AttackType](databaseName, tableName, d.Data.(map[string]interface{}))
-					case []models.NginxLog:
-						fmt.Println("Data is of type NginxLog")
-						insertData[[]models.NginxLog](databaseName, tableName, d.Data.(map[string]interface{}))
-					case []models.SynTraffic:
-						fmt.Println("Data is of type SynTraffic")
-						insertData[[]models.SynTraffic](databaseName, tableName, d.Data.(map[string]interface{}))
-					case []models.GeoData:
-						fmt.Println("Data is of type GeoData")
-						insertData[[]models.GeoData](databaseName, tableName, d.Data.(map[string]interface{}))
-					case []models.GeoLocationData:
-						fmt.Println("Data is of type GeoLocationData")
-						insertData[[]models.GeoLocationData](databaseName, tableName, d.Data.(map[string]interface{}))
-					default:
-						fmt.Println("Data is of unknown type")
-					}
-
-				} else {
-					util.PrintError(" [handleconnection] Data is nil")
-				}
 			}
 		}
 
@@ -576,10 +503,124 @@ func tableToModel(tableName string) any {
 	return nil
 }
 
+func (s *IPCServer) handlePost(m ipc.Metadata, data interface{}) {
+	// conn := s.conn
+
+	util.PrintBold("Got a POST request - inserting data...")
+	// Insert the data into the database
+	// byteData := d["Data"].([]byte)
+	// var logdata []ipc.GetJSON
+
+	// json.Unmarshal(byteData, &d)
+
+	// determineActualType(data)
+
+	databaseName := m.Destination.Object.Database.Name
+	tableName := m.Destination.Object.Database.Table
+
+	// wait := make(chan string)
+	// var message string
+	bytes, err := json.Marshal(data)
+	if err != nil {
+		util.PrintError("Failed to marshal the data: " + err.Error())
+		return
+	}
+	if len(bytes) > 150 {
+		fmt.Println("Data: ", string(bytes[:150]))
+	} else {
+		fmt.Println("Data: ", string(bytes))
+	}
+
+	util.PrintDebug("Key value pairs in the data object: ")
+	field := 0
+	if dataList, ok := data.([]interface{}); ok {
+		for _, v := range dataList {
+			field++
+			fmt.Println(field, "=>", v)
+		}
+	}
+	fmt.Println("Field count: ", field)
+
+	switch t := data.(type) {
+	case []models.AttackType:
+		fmt.Println("Data is of type " + fmt.Sprintf("%T", t))
+		fmt.Println("Data is of type []AttackType")
+		insertData[[]models.AttackType](databaseName, tableName, data.(map[string]interface{}))
+	case []models.NginxLog:
+		fmt.Println("Data is of type []NginxLog")
+		insertData[[]models.NginxLog](databaseName, tableName, data.(map[string]interface{}))
+	case []models.SynTraffic:
+		fmt.Println("Data is of type []SynTraffic")
+		insertData[[]models.SynTraffic](databaseName, tableName, data.(map[string]interface{}))
+	case []models.GeoData:
+		fmt.Println("Data is of type []GeoData")
+		insertData[[]models.GeoData](databaseName, tableName, data.(map[string]interface{}))
+	case []models.GeoLocationData:
+		fmt.Println("Data is of type []GeoLocationData")
+		insertData[[]models.GeoLocationData](databaseName, tableName, data.(map[string]interface{}))
+	case []ipc.GenericData:
+		fmt.Println("Data is of type []GenericData")
+		insertData[[]ipc.GenericData](databaseName, tableName, data.(map[string]interface{}))
+	case []ipc.GetJSON:
+		fmt.Println("Data is of type []GetJSON")
+		insertData[[]ipc.GetJSON](databaseName, tableName, data.(map[string]interface{}))
+	case models.AttackType:
+		fmt.Println("Data is of type AttackType")
+		insertData[models.AttackType](databaseName, tableName, data.(models.AttackType))
+	case models.IndicatorsLog:
+		fmt.Println("Data is of type IndicatorsLog")
+		insertData[models.IndicatorsLog](databaseName, tableName, data.(models.IndicatorsLog))
+	case map[models.AttackType]string:
+		fmt.Println("Data is of type map[AttackType]string")
+		insertData[map[models.AttackType]string](databaseName, tableName, data.(map[models.AttackType]string))
+	case map[models.NginxLog]string:
+		fmt.Println("Data is of type map[NginxLog]string")
+		insertData[map[models.NginxLog]string](databaseName, tableName, data.(map[models.NginxLog]string))
+	case map[models.SynTraffic]string:
+		fmt.Println("Data is of type map[SynTraffic]string")
+		insertData[map[models.SynTraffic]string](databaseName, tableName, data.(map[models.SynTraffic]string))
+	case map[models.GeoData]string:
+		fmt.Println("Data is of type map[GeoData]string")
+		insertData[map[models.GeoData]string](databaseName, tableName, data.(map[models.GeoData]string))
+	case map[models.GeoLocationData]string:
+		fmt.Println("Data is of type map[GeoLocationData]string")
+		insertData[map[models.GeoLocationData]string](databaseName, tableName, data.(map[models.GeoLocationData]string))
+	case []map[models.AttackType]interface{}:
+		fmt.Println("Data is of type []map[AttackType]interface{}")
+		insertData[[]map[models.AttackType]interface{}](databaseName, tableName, data.(map[models.AttackType]interface{}))
+	case []map[models.NginxLog]interface{}:
+		fmt.Println("Data is of type []map[NginxLog]interface{}")
+		insertData[[]map[models.NginxLog]interface{}](databaseName, tableName, data.(map[models.NginxLog]interface{}))
+	case []map[models.SynTraffic]interface{}:
+		fmt.Println("Data is of type []map[SynTraffic]interface{}")
+		insertData[[]map[models.SynTraffic]interface{}](databaseName, tableName, data.(map[models.SynTraffic]interface{}))
+	case []map[models.GeoData]interface{}:
+		fmt.Println("Data is of type []map[GeoData]interface{}")
+		insertData[[]map[models.GeoData]interface{}](databaseName, tableName, data.(map[models.GeoData]interface{}))
+	case []map[models.GeoLocationData]interface{}:
+		fmt.Println("Data is of type []map[GeoLocationData]interface{}")
+		insertData[[]map[models.GeoLocationData]interface{}](databaseName, tableName, data.(map[models.GeoLocationData]interface{}))
+	case []interface{}:
+		fmt.Println("Data is of type []interface{}")
+
+		// var tmpData []models.AttackType
+		// marshalled, err := json.Marshal(data)
+		// if err != nil {
+		// 	util.PrintError("Failed to marshal the data: " + err.Error())
+		// }
+		// json.Unmarshal(marshalled, &tmpData)
+		// insertData[models.AttackType](databaseName, tableName, tmpData)
+		insertData[models.AttackType](databaseName, tableName, data.([]interface{}))
+
+	default:
+		fmt.Println("Data is of unknown type")
+	}
+}
+
 // WIP: ✅ Tested - working
-func insertData[StoreType any](databaseName, tableName string, data ipc.GenericData) {
+func insertData[StoreType any](databaseName, tableName string, data any) {
 	// Get the data store
-	d := data["data"].([]interface{})
+	d := data.([]StoreType)
 
 	s, err := stores.Use(tableName)
 	if err != nil {
@@ -597,15 +638,6 @@ func insertData[StoreType any](databaseName, tableName string, data ipc.GenericD
 	case models.ATTACK_TYPE:
 		// Insert the data into the database
 		util.PrintDebug("Inserting data into the database...")
-		/* ERROR
-				[DEBUG] Inserting data into the database...
-		panic: interface conversion: interface {} is ipc.GenericData, not models.AttackType
-
-		goroutine 10 [running]:
-		github.com/pynezz/bivrost/internal/ipc/ipcserver.insertData({0x9f0cbc?, 0x9dfd26?}, {0xc0015bc2d0, 0xc}, {0x96d6a0, 0xc000430690})
-				/mnt/c/Users/kada
-		*/
-
 		var tmpData []models.AttackType
 		tmpBytes, err := json.Marshal(d)
 		if err != nil {

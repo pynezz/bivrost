@@ -30,6 +30,10 @@ type ConfigRequest struct {
 	Fields config.Cfg `text:"id" json:"id" yaml:"id"`
 }
 
+const (
+	prefix = "/api/v1"
+)
+
 // NewServer initializes a new API server with the provided configuration.
 // Renamed config.Config to config.Cfg to avoid confusion with the Fiber Config struct
 func NewServer(cfg *config.Cfg) *fiber.App {
@@ -55,9 +59,14 @@ func NewServer(cfg *config.Cfg) *fiber.App {
 
 	fmt.Printf("Argon2 hash: %s%s%s\n", util.LightYellow, argon2Instance.GetEncodedHash(), util.Reset)
 
+	// Group routes for the dashboard and every child route
+	protectedDash := app.Group("/dashboard", middleware.Bouncer())
+
+	app.Use(protectedDash)
+
 	// For every path except the root, check if the user is authenticated
 	app.Use(func(c *fiber.Ctx) error {
-		if c.Path() != "/" && c.Path() != "/login" && c.Path() != "/register" {
+		if c.Path() != "/" && c.Path() != prefix+"/login" && c.Path() != prefix+"/register" {
 			return middleware.Bouncer()(c)
 		}
 		return c.Next()
@@ -98,7 +107,7 @@ func setupRoutes(app *fiber.App, cfg *config.Cfg) {
 	app.Get("/", indexHandler)               // Root path
 	app.Get("/ws", websocket.New(wsHandler)) // WebSockets
 
-	app.Post("/config/add_source", func(c *fiber.Ctx) error {
+	app.Post("/api/v1/config/add_source", func(c *fiber.Ctx) error {
 		c.Accepts("application/yaml", "application/json")
 		// Serialize the request body to a struct
 		var configRequest ConfigRequest

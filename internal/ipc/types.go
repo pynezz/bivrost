@@ -45,6 +45,7 @@ type Metadata struct {
 	Source      string      `json:"source"`      // Source. Ex: sigma
 	Destination Destination `json:"destination"` // Destination. Ex: { name: database, info: "table=threat_intel" }
 	Method      string      `json:"method"`      // Using HTTP verbs to differentiate between requests (ps: this got nothing to do with actual HTTP)
+	Type        any         `json:"type"`        // Type of the data. A struct or a map
 }
 
 type Destination struct {
@@ -60,7 +61,7 @@ type Object struct {
 type Database struct {
 	Name  string `json:"name"`
 	Table string `json:"table"`
-	RowID string `json:"row_id"` // Row ID - fetch anything after this ID
+	RowID string `json:"row_id,omitempty"` // Row ID - fetch anything after this ID
 }
 
 type GetJSON struct {

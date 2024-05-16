@@ -192,10 +192,7 @@ func Execute(isPackage bool) {
 	// Meaning that the database will be closed when the application is closed.
 	defer db.Driver.Close()
 
-	// TODO: When done - move this to the bottom of the function
-	<-sigChan
-
-	port := 3000
+	port := 3300
 	if cfg.Network.Port != 0 {
 		port = cfg.Network.Port
 	}
@@ -206,6 +203,8 @@ func Execute(isPackage bool) {
 
 	util.PrintItalic("[main.go] Waiting for SIGINT or SIGTERM... Press Ctrl+C to exit.")
 	util.PrintItalic("[main.go] Exiting...")
+	// // TODO: When done - move this to the bottom of the function
+	<-sigChan
 }
 
 const dbPath = "users.db" // Testing purposes. This should be in the config file
