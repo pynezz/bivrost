@@ -77,6 +77,8 @@ type WebAuthnRegisterRequest struct {
 // fetching it from the server.
 
 func Bouncer() fiber.Handler {
+	// cmds := scripttest.DefaultCmds()
+
 	util.PrintDebug("Bouncer middleware is running")
 	return func(c *fiber.Ctx) error {
 		if c.Route().Path == "/" {
@@ -269,6 +271,8 @@ func BeginRegistration(c *fiber.Ctx) error {
 	}
 
 	util.PrintSuccess("Username: " + username)
+
+	// os.cms
 
 	// Insert the user into the database
 	db := GetDBInstance()

@@ -11,17 +11,17 @@ VERSION=$(shell git describe --tags --always --long)
 
 .PHONY: all test clean
 
-$(LINUX): cmd/bivrost/main.go
-	CGO_ENABLED=1 go build -v -o $(LINUX) -tags linux -ldflags="-s -w -X main.version=$(VERSION)" ./cmd/bivrost/main.go
+$(LINUX): main.go
+	CGO_ENABLED=1 go build -v -o $(LINUX) -tags linux -ldflags="-s -w -X main.buildVersion=$(VERSION)" .
 
 $(TEST_LINUX): cmd/testmodule/main.go
-	CGO_ENABLED=1 go build -v -o $(TEST_LINUX) -tags linux -ldflags="-s -w -X main.version=$(VERSION)" ./cmd/testmodule/main.go
+	CGO_ENABLED=1 go build -v -o $(TEST_LINUX) -tags linux -ldflags="-s -w -X main.buildVersion=$(VERSION)" ./cmd/testmodule/main.go
 
-$(WINDOWS): cmd/bivrost/main.go
-	GOOS=windows GOARCH=amd64 CGO_ENABLED=1 go build -v -o $(WINDOWS) -ldflags="-s -w -X main.version=$(VERSION)" ./cmd/bivrost/main.go
+$(WINDOWS): main.go
+	GOOS=windows GOARCH=amd64 CGO_ENABLED=1 go build -v -o $(WINDOWS) -ldflags="-s -w -X main.buildVersion=$(VERSION)" .
 
 $(TEST_WINDOWS): cmd/testmodule/main.go
-	GOOS=windows GOARCH=amd64 CGO_ENABLED=1 go build -v -o $(TEST_WINDOWS) -ldflags="-s -w -X main.version=$(VERSION)" ./cmd/testmodule/main.go
+	GOOS=windows GOARCH=amd64 CGO_ENABLED=1 go build -v -o $(TEST_WINDOWS) -ldflags="-s -w -X main.buildVersion=$(VERSION)" ./cmd/testmodule/main.go
 
 # Build targets
 windows: $(WINDOWS)

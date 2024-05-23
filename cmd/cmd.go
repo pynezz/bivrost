@@ -8,7 +8,7 @@ import (
 	"github.com/pynezz/bivrost/cmd/bivrost"
 )
 
-func Execute() {
+func Execute(buildVersion string) {
 	path, err := os.Getwd()
 	if err != nil {
 		panic(err)
@@ -26,5 +26,5 @@ func Execute() {
 		}
 	}
 
-	bivrost.Execute(isPackage)
+	bivrost.Execute(isPackage, buildVersion)
 }

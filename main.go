@@ -3,10 +3,12 @@ package main
 
 import "github.com/pynezz/bivrost/cmd"
 
+var buildVersion string
+
 func Execute() {
-	cmd.Execute()
+	cmd.Execute(buildVersion)
 }
 
 func main() {
-	cmd.Execute()
+	cmd.Execute(buildVersion)
 }

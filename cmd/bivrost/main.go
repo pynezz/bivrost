@@ -41,7 +41,15 @@ import (
 // 7. It initializes the Fiber server with the configuration values.
 // 8. It sets the port to 3000 if the configuration file does not specify a port.
 
-func Execute(isPackage bool) {
+func Execute(isPackage bool, buildVersion string) {
+	// Parse the command line arguments (flags)
+	if !isPackage {
+		flag.Parse()
+	}
+
+	args := flags.ParseFlags()
+	util.PrintInfo(" > Config path: " + *args.ConfigPath)
+	util.PrintInfo(" > Log path: " + *args.LogPath)
 
 	// Setting up signal handling to catch CTRL+C and other termination signals
 	sigChan := make(chan os.Signal, 1)
@@ -53,7 +61,7 @@ func Execute(isPackage bool) {
 		os.Exit(0)
 	}()
 
-	termiui := tui.NewTui()
+	termiui := tui.NewTui(buildVersion)
 	termiui.Header.Color = util.Cyan
 	termiui.Header.PrintHeader()
 
@@ -68,15 +76,6 @@ func Execute(isPackage bool) {
 		flag.Usage()
 		return
 	}
-
-	// Parse the command line arguments (flags)
-	if !isPackage {
-		flag.Parse()
-	}
-
-	args := flags.ParseFlags()
-	util.PrintInfo(" > Config path: " + *args.ConfigPath)
-	util.PrintInfo(" > Log path: " + *args.LogPath)
 
 	// util.PrintDebug("Testing Sigma rules...")
 	// sigma.Test()

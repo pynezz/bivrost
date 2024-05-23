@@ -8,6 +8,7 @@ import (
 	"github.com/pynezz/bivrost/internal/config"
 	"github.com/pynezz/bivrost/internal/middleware"
 	"github.com/pynezz/bivrost/internal/util"
+	"github.com/pynezz/bivrost/internal/util/cryptoutils"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/logger"
@@ -31,7 +32,8 @@ type ConfigRequest struct {
 }
 
 const (
-	prefix = "/api/v1"
+	prefix         = "/api/v1"
+	unprotectedApi = "/api/v3"
 )
 
 // NewServer initializes a new API server with the provided configuration.
@@ -61,8 +63,15 @@ func NewServer(cfg *config.Cfg) *fiber.App {
 
 	// Group routes for the dashboard and every child route
 	protectedDash := app.Group("/dashboard", middleware.Bouncer())
+	app.Group(prefix, middleware.Bouncer())
 
-	app.Use(protectedDash)
+	protectedDash.Get("/settings", settingsHandler)
+
+	unprotectedApiGroup := app.Group(unprotectedApi)
+	unprotectedApiGroup.Post("/antiphishing", antiphishingHandler)
+	unprotectedApiGroup.Get("/facts", func(c *fiber.Ctx) error {
+		return c.SendString(getRandomJoke())
+	})
 
 	// For every path except the root, check if the user is authenticated
 	app.Use(func(c *fiber.Ctx) error {
@@ -76,6 +85,10 @@ func NewServer(cfg *config.Cfg) *fiber.App {
 	setupRoutes(app, cfg)
 
 	return app
+}
+
+func settingsHandler(c *fiber.Ctx) error {
+	return c.SendString("Settings page")
 }
 
 // The antiphishingHandler function is a function that handles the antiphishing route.
@@ -107,7 +120,7 @@ func setupRoutes(app *fiber.App, cfg *config.Cfg) {
 	app.Get("/", indexHandler)               // Root path
 	app.Get("/ws", websocket.New(wsHandler)) // WebSockets
 
-	app.Post("/api/v1/config/add_source", func(c *fiber.Ctx) error {
+	app.Post(prefix+"/config/add_source", func(c *fiber.Ctx) error {
 		c.Accepts("application/yaml", "application/json")
 		// Serialize the request body to a struct
 		var configRequest ConfigRequest
@@ -127,7 +140,7 @@ func setupRoutes(app *fiber.App, cfg *config.Cfg) {
 	})
 
 	// For the ThreatIntel module
-	app.Post("/api/v1/intel/", func(c *fiber.Ctx) error {
+	app.Post(prefix+"/intel/", func(c *fiber.Ctx) error {
 		c.AcceptsEncodings("application/json")
 		payload := new(IntelRequest)
 		if err := c.BodyParser(payload); err != nil {
@@ -224,3 +237,24 @@ func wsHandler(c *websocket.Conn) {
 // 		Handler: handler,
 // 	}
 // }
+
+func getRandomJoke() string {
+	i, _ := cryptoutils.GenerateRandomInt(0, len(jokes))
+	if i > uint64(len(jokes)) {
+		i--
+	}
+	return jokes[i]
+}
+
+var jokes = []string{
+	"\"Knock, knock.\"\n\"Who's there?\"\nvery long pause…\n\"Java.\"",
+	"A SQL query goes into a bar, walks up to two tables and asks, \"Can I join you?\"",
+	"If you put a million monkeys at a million keyboards, one of them will eventually write a Java program.\nThe rest of them will write Perl programs.",
+	"Why are Assembly programmers always soaking wet? They work below C-level.",
+	"3 SQL databases walked into a NoSQL bar. A little while later they walked out, because they couldn't find a table.",
+	"To understand what recursion is, you must first understand recursion.",
+	"ASCII stupid question, get a stupid ANSI.",
+	"Why did the programmer quit his job?\nBecause he didn't get arrays.",
+	"UNIX is user friendly. It's just very particular about who its friends are.",
+	"I don't see women as objects. I consider each to be in a class of her own.",
+}
