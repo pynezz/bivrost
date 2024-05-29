@@ -32,7 +32,7 @@ type ConfigRequest struct {
 }
 
 const (
-	prefix         = "/api/v1"
+	protectedApi   = "/api/v1"
 	unprotectedApi = "/api/v3"
 )
 
@@ -63,7 +63,7 @@ func NewServer(cfg *config.Cfg) *fiber.App {
 
 	// Group routes for the dashboard and every child route
 	protectedDash := app.Group("/dashboard", middleware.Bouncer())
-	app.Group(prefix, middleware.Bouncer())
+	// app.Group(protectedApi, middleware.Bouncer())
 
 	protectedDash.Get("/settings", settingsHandler)
 
@@ -75,7 +75,7 @@ func NewServer(cfg *config.Cfg) *fiber.App {
 
 	// For every path except the root, check if the user is authenticated
 	app.Use(func(c *fiber.Ctx) error {
-		if c.Path() != "/" && c.Path() != prefix+"/login" && c.Path() != prefix+"/register" {
+		if c.Path() != "/" && c.Path() != protectedApi+"/login" && c.Path() != protectedApi+"/register" {
 			return middleware.Bouncer()(c)
 		}
 		return c.Next()
@@ -120,7 +120,7 @@ func setupRoutes(app *fiber.App, cfg *config.Cfg) {
 	app.Get("/", indexHandler)               // Root path
 	app.Get("/ws", websocket.New(wsHandler)) // WebSockets
 
-	app.Post(prefix+"/config/add_source", func(c *fiber.Ctx) error {
+	app.Post(protectedApi+"/config/add_source", func(c *fiber.Ctx) error {
 		c.Accepts("application/yaml", "application/json")
 		// Serialize the request body to a struct
 		var configRequest ConfigRequest
@@ -140,7 +140,7 @@ func setupRoutes(app *fiber.App, cfg *config.Cfg) {
 	})
 
 	// For the ThreatIntel module
-	app.Post(prefix+"/intel/", func(c *fiber.Ctx) error {
+	app.Post(protectedApi+"/intel/", func(c *fiber.Ctx) error {
 		c.AcceptsEncodings("application/json")
 		payload := new(IntelRequest)
 		if err := c.BodyParser(payload); err != nil {
