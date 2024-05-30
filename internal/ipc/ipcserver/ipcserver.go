@@ -546,86 +546,128 @@ func (s *IPCServer) handlePost(m ipc.Metadata, data interface{}) {
 	}
 	fmt.Println("Field count: ", fields)
 
+	// TODO NEXT 1.0
 	marshalled, err := json.Marshal(data)
 	if err != nil {
 		util.PrintError("Failed to marshal the data: " + err.Error())
 	}
 
-	// Convert byte array to model type:
-	// determineActualType(marshalled, databaseName, tableName)
-
-	switch t := data.(type) {
-	case []models.AttackType:
-		fmt.Println("Data is of type " + fmt.Sprintf("%T", t))
-		fmt.Println("Data is of type []AttackType")
-		insertData[[]models.AttackType](databaseName, tableName, data.(map[string]interface{}))
-	case []models.NginxLog:
-		fmt.Println("Data is of type []NginxLog")
-		insertData[[]models.NginxLog](databaseName, tableName, data.(map[string]interface{}))
-	case []models.SynTraffic:
-		fmt.Println("Data is of type []SynTraffic")
-		insertData[[]models.SynTraffic](databaseName, tableName, data.(map[string]interface{}))
-	case []models.GeoData:
-		fmt.Println("Data is of type []GeoData")
-		insertData[[]models.GeoData](databaseName, tableName, data.(map[string]interface{}))
-	case []models.GeoLocationData:
-		fmt.Println("Data is of type []GeoLocationData")
-		insertData[[]models.GeoLocationData](databaseName, tableName, data.(map[string]interface{}))
-	case []ipc.GenericData:
-		fmt.Println("Data is of type []GenericData")
-		insertData[[]ipc.GenericData](databaseName, tableName, data.(map[string]interface{}))
-	case []ipc.GetJSON:
-		fmt.Println("Data is of type []GetJSON")
-		insertData[[]ipc.GetJSON](databaseName, tableName, data.(map[string]interface{}))
-	case models.AttackType:
-		fmt.Println("Data is of type AttackType")
-		insertData[models.AttackType](databaseName, tableName, data.(models.AttackType))
-	case models.IndicatorsLog:
-		fmt.Println("Data is of type IndicatorsLog")
-		insertData[models.IndicatorsLog](databaseName, tableName, data.(models.IndicatorsLog))
-	case map[models.AttackType]string:
-		fmt.Println("Data is of type map[AttackType]string")
-		insertData[map[models.AttackType]string](databaseName, tableName, data.(map[models.AttackType]string))
-	case map[models.NginxLog]string:
-		fmt.Println("Data is of type map[NginxLog]string")
-		insertData[map[models.NginxLog]string](databaseName, tableName, data.(map[models.NginxLog]string))
-	case map[models.SynTraffic]string:
-		fmt.Println("Data is of type map[SynTraffic]string")
-		insertData[map[models.SynTraffic]string](databaseName, tableName, data.(map[models.SynTraffic]string))
-	case map[models.GeoData]string:
-		fmt.Println("Data is of type map[GeoData]string")
-		insertData[map[models.GeoData]string](databaseName, tableName, data.(map[models.GeoData]string))
-	case map[models.GeoLocationData]string:
-		fmt.Println("Data is of type map[GeoLocationData]string")
-		insertData[map[models.GeoLocationData]string](databaseName, tableName, data.(map[models.GeoLocationData]string))
-	case []map[models.AttackType]interface{}:
-		fmt.Println("Data is of type []map[AttackType]interface{}")
-		insertData[[]map[models.AttackType]interface{}](databaseName, tableName, data.(map[models.AttackType]interface{}))
-	case []map[models.NginxLog]interface{}:
-		fmt.Println("Data is of type []map[NginxLog]interface{}")
-		insertData[[]map[models.NginxLog]interface{}](databaseName, tableName, data.(map[models.NginxLog]interface{}))
-	case []map[models.SynTraffic]interface{}:
-		fmt.Println("Data is of type []map[SynTraffic]interface{}")
-		insertData[[]map[models.SynTraffic]interface{}](databaseName, tableName, data.(map[models.SynTraffic]interface{}))
-	case []map[models.GeoData]interface{}:
-		fmt.Println("Data is of type []map[GeoData]interface{}")
-		insertData[[]map[models.GeoData]interface{}](databaseName, tableName, data.(map[models.GeoData]interface{}))
-	case []map[models.GeoLocationData]interface{}:
-		fmt.Println("Data is of type []map[GeoLocationData]interface{}")
-		insertData[[]map[models.GeoLocationData]interface{}](databaseName, tableName, data.(map[models.GeoLocationData]interface{}))
-	case []interface{}:
-		fmt.Println("Data is of type []interface{}")
-
-		//TODO NEXT: Implement the insertion of the data into the database - even if the type is not AttackType
+	switch tableName {
+	case models.ATTACK_TYPE:
+		// Insert the data into the database
+		util.PrintDebug("Inserting data into the database...")
+		//TODO NEXT 1.1: Implement the insertion of the data into the database - even if the type is not AttackType
 		var tmpData []models.AttackType
 
 		json.Unmarshal(marshalled, &tmpData)
 		insertData[models.AttackType](databaseName, tableName, tmpData)
-		// insertData[models.AttackType](databaseName, tableName, data.([]interface{}))
+	case models.INDICATORS_LOG:
+		// Insert the data into the database
+		var tmpData []models.IndicatorsLog
+		json.Unmarshal(marshalled, &tmpData)
+		insertData[models.IndicatorsLog](databaseName, tableName, tmpData)
+	case models.NGINX_LOGS:
+		// Insert the data into the database
+		var tmpData []models.NginxLog
+		json.Unmarshal(marshalled, &tmpData)
+		insertData[models.NginxLog](databaseName, tableName, tmpData)
+	case models.SYN_TRAFFIC:
+		// Insert the data into the database
+		var tmpData []models.SynTraffic
 
+		json.Unmarshal(marshalled, &tmpData)
+		insertData[models.SynTraffic](databaseName, tableName, tmpData)
+	case models.GEO_DATA:
+		// Insert the data into the database
+		var tmpData []models.GeoData
+		json.Unmarshal(marshalled, &tmpData)
+		insertData[models.GeoData](databaseName, tableName, tmpData)
+	case models.GEO_LOCATION_DATA:
+		// Insert the data into the database
+		var tmpData []models.GeoLocationData
+		json.Unmarshal(marshalled, &tmpData)
+		insertData[models.GeoLocationData](databaseName, tableName, tmpData)
 	default:
-		fmt.Println("Data is of unknown type")
+		// Insert the data into the database
+		util.PrintDebug("Unknown table name")
+
 	}
+
+	// Convert byte array to model type:
+	// determineActualType(marshalled, databaseName, tableName)
+
+	// switch t := data.(type) {
+	// case []models.AttackType:
+	// 	fmt.Println("Data is of type " + fmt.Sprintf("%T", t))
+	// 	fmt.Println("Data is of type []AttackType")
+	// 	insertData[[]models.AttackType](databaseName, tableName, data.(map[string]interface{}))
+	// case []models.NginxLog:
+	// 	fmt.Println("Data is of type []NginxLog")
+	// 	insertData[[]models.NginxLog](databaseName, tableName, data.(map[string]interface{}))
+	// case []models.SynTraffic:
+	// 	fmt.Println("Data is of type []SynTraffic")
+	// 	insertData[[]models.SynTraffic](databaseName, tableName, data.(map[string]interface{}))
+	// case []models.GeoData:
+	// 	fmt.Println("Data is of type []GeoData")
+	// 	insertData[[]models.GeoData](databaseName, tableName, data.(map[string]interface{}))
+	// case []models.GeoLocationData:
+	// 	fmt.Println("Data is of type []GeoLocationData")
+	// 	insertData[[]models.GeoLocationData](databaseName, tableName, data.(map[string]interface{}))
+	// case []ipc.GenericData:
+	// 	fmt.Println("Data is of type []GenericData")
+	// 	insertData[[]ipc.GenericData](databaseName, tableName, data.(map[string]interface{}))
+	// case []ipc.GetJSON:
+	// 	fmt.Println("Data is of type []GetJSON")
+	// 	insertData[[]ipc.GetJSON](databaseName, tableName, data.(map[string]interface{}))
+	// case models.AttackType:
+	// 	fmt.Println("Data is of type AttackType")
+	// 	insertData[models.AttackType](databaseName, tableName, data.(models.AttackType))
+	// case models.IndicatorsLog:
+	// 	fmt.Println("Data is of type IndicatorsLog")
+	// 	insertData[models.IndicatorsLog](databaseName, tableName, data.(models.IndicatorsLog))
+	// case map[models.AttackType]string:
+	// 	fmt.Println("Data is of type map[AttackType]string")
+	// 	insertData[map[models.AttackType]string](databaseName, tableName, data.(map[models.AttackType]string))
+	// case map[models.NginxLog]string:
+	// 	fmt.Println("Data is of type map[NginxLog]string")
+	// 	insertData[map[models.NginxLog]string](databaseName, tableName, data.(map[models.NginxLog]string))
+	// case map[models.SynTraffic]string:
+	// 	fmt.Println("Data is of type map[SynTraffic]string")
+	// 	insertData[map[models.SynTraffic]string](databaseName, tableName, data.(map[models.SynTraffic]string))
+	// case map[models.GeoData]string:
+	// 	fmt.Println("Data is of type map[GeoData]string")
+	// 	insertData[map[models.GeoData]string](databaseName, tableName, data.(map[models.GeoData]string))
+	// case map[models.GeoLocationData]string:
+	// 	fmt.Println("Data is of type map[GeoLocationData]string")
+	// 	insertData[map[models.GeoLocationData]string](databaseName, tableName, data.(map[models.GeoLocationData]string))
+	// case []map[models.AttackType]interface{}:
+	// 	fmt.Println("Data is of type []map[AttackType]interface{}")
+	// 	insertData[[]map[models.AttackType]interface{}](databaseName, tableName, data.(map[models.AttackType]interface{}))
+	// case []map[models.NginxLog]interface{}:
+	// 	fmt.Println("Data is of type []map[NginxLog]interface{}")
+	// 	insertData[[]map[models.NginxLog]interface{}](databaseName, tableName, data.(map[models.NginxLog]interface{}))
+	// case []map[models.SynTraffic]interface{}:
+	// 	fmt.Println("Data is of type []map[SynTraffic]interface{}")
+	// 	insertData[[]map[models.SynTraffic]interface{}](databaseName, tableName, data.(map[models.SynTraffic]interface{}))
+	// case []map[models.GeoData]interface{}:
+	// 	fmt.Println("Data is of type []map[GeoData]interface{}")
+	// 	insertData[[]map[models.GeoData]interface{}](databaseName, tableName, data.(map[models.GeoData]interface{}))
+	// case []map[models.GeoLocationData]interface{}:
+	// 	fmt.Println("Data is of type []map[GeoLocationData]interface{}")
+	// 	insertData[[]map[models.GeoLocationData]interface{}](databaseName, tableName, data.(map[models.GeoLocationData]interface{}))
+	// case []interface{}:
+	// 	fmt.Println("Data is of type []interface{}")
+
+	// 	//TODO NEXT 1.1: Implement the insertion of the data into the database - even if the type is not AttackType
+	// 	var tmpData []models.AttackType
+
+	// 	json.Unmarshal(marshalled, &tmpData)
+	// 	insertData[models.AttackType](databaseName, tableName, tmpData)
+	// 	// insertData[models.AttackType](databaseName, tableName, data.([]interface{}))
+
+	// default:
+	// 	fmt.Println("Data is of unknown type")
+	// }
 }
 
 // WIP: ❌ Tested - not working anymore..?
