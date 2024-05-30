@@ -195,7 +195,7 @@ func (s *DataStore[T]) InsertBulk(logChan <-chan T, bulkSize int) error {
 		defer close(done)
 		for log := range logChan {
 			counter++
-			util.PrintColorAndBg(util.White, "\033[40m", "Inserting log: ")
+			// util.PrintColorAndBg(util.White, "\033[40m", "Inserting log: ")
 			// util.PrintColor(util.DarkCyan, string(log.ID))
 			buffer = append(buffer, log)
 			if counter%batchSize == 0 {

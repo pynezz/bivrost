@@ -83,9 +83,9 @@ func Execute(isPackage bool, buildVersion string) {
 	// nginxDB, err := fetcher.ReadDB("logs")
 	gormConf := gorm.Config{
 		PrepareStmt:     true,
-		CreateBatchSize: 100,
+		CreateBatchSize: 200,
 
-		Logger: logger.Default.LogMode(logger.Info),
+		Logger: logger.Default.LogMode(logger.Silent),
 	}
 
 	// // logs.db

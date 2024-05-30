@@ -36,11 +36,8 @@ const (
  * To identify the module, the client will send a 4 byte identifier as part of the header.
  */
 var MODULEIDENTIFIERS map[string][]byte
-
 var MSGTYPE map[string]byte
-
 var SERVERIDENTIFIER [4]byte
-
 var IPCID []byte
 
 /* TYPES
@@ -217,34 +214,7 @@ func parseConnection(c net.Conn) (ipc.IPCRequest, error) {
 // Returns the source, destination, and a boolean indicating if the metadata is nil
 func parseMetadata(msg ipc.Metadata) (ipc.Metadata, bool) {
 
-	// TODO: Might be reasonable to implement the Metadata struct here (ipc.Metadata)
 	metadata := msg
-
-	// source := metadata.(map[string]interface{})["source"].(string)
-	// destination := metadata.(map[string]interface{})["destination"].(map[string]interface{})["destination"]
-	// destinationId := destination.(map[string]interface{})["id"].(string)
-	// destinationName := destination.(map[string]interface{})["name"]
-	// destinationInfo := destination.(map[string]interface{})["database"]
-
-	// databaseName := destinationInfo.(map[string]interface{})["name"]
-	// tableName := destinationInfo.(map[string]interface{})["table"]
-
-	// m := ipc.Metadata{
-	// 	Source: source,
-	// 	Destination: ipc.Destination{
-	// 		Object: ipc.Object{
-	// 			Id:   destinationId,
-	// 			Name: destinationName.(string),
-	// 			Database: ipc.Database{
-	// 				Name:  databaseName.(string),
-	// 				Table: tableName.(string),
-	// 			},
-	// 		},
-	// 	},
-	// 	Method: msg.Method,
-	// }
-
-	// method := metadata.(map[string]interface{})["method"]
 
 	v := ""
 	if metadata.Method == "POST" {
@@ -258,8 +228,6 @@ func parseMetadata(msg ipc.Metadata) (ipc.Metadata, bool) {
 	} else {
 		v = "???"
 	}
-
-	util.PrintColorf(util.DarkYellow, "Metadata object: %s", metadata)
 
 	sentence := fmt.Sprintf("\n %s wants to %s %s with id %s \n", metadata.Source, v, metadata.Destination.Object, metadata.Destination.Object.Id)
 	util.PrintBold(sentence)
@@ -358,9 +326,39 @@ func parseData(msg *ipc.IPCMessage) (ipc.GenericData, JsonResponse) {
 	return data, jsonData
 }
 
-func handleGenericData(dataType any) {
+// func reflectType(t reflect.Type) string {
+// 	switch t.Name() {
+// 	case "AttackType":
+// 	case reflect.Int:
+// 		return "int"
+// 	case reflect.Bool:
+// 		return "bool"
+// 	case reflect.Float64:
+// 		return "float64"
+// 	case reflect.Slice:
+// 		return "slice"
+// 	case reflect.Map:
+// 		return "map"
+// 	case reflect.Struct:
+// 		return "struct"
+// 	default:
+// 		return "unknown"
+// 	}
+
+// }
+
+func handleGenericData( /* t reflect.Type, */ dataType any) {
 	// Handle the data
 	fmt.Println("Handling generic data...")
+
+	dataBytes, ok := dataType.([]byte)
+	if !ok {
+		fmt.Println("Invalid data type")
+		return
+	}
+
+	gob.NewDecoder(bytes.NewReader(dataBytes)).Decode(&dataType)
+	fmt.Println("Data: ", dataType)
 
 }
 
@@ -394,8 +392,6 @@ func (s *IPCServer) handleConnection(c net.Conn) {
 		} else {
 			util.PrintColorf(util.LightCyan, "Module name: %s", moduleName)
 		}
-
-		// senderModule := modules.GetModule(moduleName)
 
 		source := fmt.Sprint(modules.Mids.GetModuleIdentifier(moduleName)) // Sorry about this (this should print the identifier of the module that sent the request)
 		fmt.Println("Source: " + source)
@@ -450,7 +446,7 @@ func (s *IPCServer) handleConnection(c net.Conn) {
 				}
 			}
 			if mData.Method == "POST" {
-
+				s.handlePost(mData, d.Data)
 			}
 		}
 
@@ -525,21 +521,38 @@ func (s *IPCServer) handlePost(m ipc.Metadata, data interface{}) {
 		util.PrintError("Failed to marshal the data: " + err.Error())
 		return
 	}
-	if len(bytes) > 150 {
-		fmt.Println("Data: ", string(bytes[:150]))
+	if len(bytes) > 100 {
+		fmt.Println("Data: ", string(bytes[:100]))
 	} else {
 		fmt.Println("Data: ", string(bytes))
 	}
 
 	util.PrintDebug("Key value pairs in the data object: ")
-	field := 0
+	// field := 0
+	fields := 0
+
 	if dataList, ok := data.([]interface{}); ok {
-		for _, v := range dataList {
-			field++
-			fmt.Println(field, "=>", v)
-		}
+		fields += len(dataList)
+		// for _, v := range dataList {
+		// 	field++
+		// fmt.Println(field, "=>", v)
+		// Print truncated data:
+		// if len(v.(map[string]interface{})) > 50 {
+		// fmt.Println(field, "=>", string(bytes[0:50]))
+		// } else {
+		// fmt.Println(field, "=>", string(bytes))
+		// }
+		// }
 	}
-	fmt.Println("Field count: ", field)
+	fmt.Println("Field count: ", fields)
+
+	marshalled, err := json.Marshal(data)
+	if err != nil {
+		util.PrintError("Failed to marshal the data: " + err.Error())
+	}
+
+	// Convert byte array to model type:
+	// determineActualType(marshalled, databaseName, tableName)
 
 	switch t := data.(type) {
 	case []models.AttackType:
@@ -603,21 +616,19 @@ func (s *IPCServer) handlePost(m ipc.Metadata, data interface{}) {
 	case []interface{}:
 		fmt.Println("Data is of type []interface{}")
 
-		// var tmpData []models.AttackType
-		// marshalled, err := json.Marshal(data)
-		// if err != nil {
-		// 	util.PrintError("Failed to marshal the data: " + err.Error())
-		// }
-		// json.Unmarshal(marshalled, &tmpData)
-		// insertData[models.AttackType](databaseName, tableName, tmpData)
-		insertData[models.AttackType](databaseName, tableName, data.([]interface{}))
+		//TODO NEXT: Implement the insertion of the data into the database - even if the type is not AttackType
+		var tmpData []models.AttackType
+
+		json.Unmarshal(marshalled, &tmpData)
+		insertData[models.AttackType](databaseName, tableName, tmpData)
+		// insertData[models.AttackType](databaseName, tableName, data.([]interface{}))
 
 	default:
 		fmt.Println("Data is of unknown type")
 	}
 }
 
-// WIP: ✅ Tested - working
+// WIP: ❌ Tested - not working anymore..?
 func insertData[StoreType any](databaseName, tableName string, data any) {
 	// Get the data store
 	d := data.([]StoreType)
@@ -631,7 +642,6 @@ func insertData[StoreType any](databaseName, tableName string, data any) {
 	}
 
 	util.PrintDebug("Getting the data store...")
-	// Insert the data into the database
 
 	// Depending on the table name, insert the data into the database
 	switch tableName {
@@ -665,28 +675,85 @@ func insertData[StoreType any](databaseName, tableName string, data any) {
 			util.PrintSuccess("Data inserted successfully")
 		}
 
-		// err := s.AttackTypeStore.InsertLog(d.(models.AttackType))
-		// if err != nil {
-		// 	util.PrintError("Failed to insert the data: " + err.Error())
-		// }
-
 	case models.NGINX_LOGS:
 		return
 	case models.SYN_TRAFFIC:
-		// err := s.SynTrafficStore.InsertLog(data.(models.SynTraffic))
-		// if err != nil {
-		// 	util.PrintError("Failed to insert the data: " + err.Error())
-		// }
+		var tmpData []models.SynTraffic
+		tmpBytes, err := json.Marshal(d)
+		if err != nil {
+			util.PrintError("Failed to marshal the data: " + err.Error())
+		}
+		err = json.Unmarshal(tmpBytes, &tmpData)
+		if err != nil {
+			util.PrintError("Failed to unmarshal the data: " + err.Error())
+		}
+		logsChannel := make(chan models.SynTraffic)
+		go func() {
+			for _, log := range tmpData {
+				logsChannel <- log
+			}
+			close(logsChannel)
+
+		}()
+
+		err = s.SynTrafficStore.InsertBulk(logsChannel, len(tmpData))
+		if err != nil {
+			util.PrintError("Failed to insert the data: " + err.Error())
+		} else {
+			util.PrintSuccess("Data inserted successfully")
+		}
 	case models.GEO_DATA:
-		// err := s.GeoDataStore.InsertLog(data.(models.GeoData))
-		// if err != nil {
-		// 	util.PrintError("Failed to insert the data: " + err.Error())
-		// }
+		var tmpData []models.GeoData
+		tmpBytes, err := json.Marshal(d)
+		if err != nil {
+			util.PrintError("Failed to marshal the data: " + err.Error())
+		}
+		err = json.Unmarshal(tmpBytes, &tmpData)
+		if err != nil {
+			util.PrintError("Failed to unmarshal the data: " + err.Error())
+		}
+
+		logsChannel := make(chan models.GeoData)
+		go func() {
+			for _, log := range tmpData {
+				logsChannel <- log
+			}
+			close(logsChannel)
+
+		}()
+
+		err = s.GeoDataStore.InsertBulk(logsChannel, len(tmpData))
+		if err != nil {
+			util.PrintError("Failed to insert the data: " + err.Error())
+		} else {
+			util.PrintSuccess("Data inserted successfully")
+		}
 	case models.GEO_LOCATION_DATA:
-		// err := s.GeoLocationDataStore.InsertLog(data.(models.GeoLocationData))
-		// if err != nil {
-		// 	util.PrintError("Failed to insert the data: " + err.Error())
-		// }
+		var tmpData []models.GeoLocationData
+		tmpBytes, err := json.Marshal(d)
+		if err != nil {
+			util.PrintError("Failed to marshal the data: " + err.Error())
+		}
+		err = json.Unmarshal(tmpBytes, &tmpData)
+		if err != nil {
+			util.PrintError("Failed to unmarshal the data: " + err.Error())
+		}
+		logsChannel := make(chan models.GeoLocationData)
+		go func() {
+			for _, log := range tmpData {
+				logsChannel <- log
+			}
+			close(logsChannel)
+
+		}()
+
+		err = s.GeoLocationDataStore.InsertBulk(logsChannel, len(tmpData))
+		if err != nil {
+			util.PrintError("Failed to insert the data: " + err.Error())
+		} else {
+			util.PrintSuccess("Data inserted successfully")
+		}
+
 	default:
 		util.PrintError("Table not found: " + tableName)
 	}
@@ -773,7 +840,11 @@ func (s *IPCServer) respond(c net.Conn, data []byte, moduleId string) error {
 	var response *ipc.IPCRequest
 	var err error
 	// TODO: Implement different responses based on verbs/methods
-
+	// if verb == "GET" {
+	// 	response, err = NewIPCMessage(moduleId, ipc.MSG_MSG, data)
+	// } else if verb == "POST" {
+	// 	response, err = NewIPCMessage(moduleId, ipc.MSG_ACK, data)
+	// }
 	response, err = NewIPCMessage(moduleId, ipc.MSG_ACK, data)
 	if err != nil {
 		return err

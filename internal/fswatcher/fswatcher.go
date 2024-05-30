@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/pynezz/bivrost/internal/util"
@@ -31,6 +32,8 @@ func Watch(file string, data chan<- string) {
 
 	scanner := bufio.NewScanner(f)
 
+	cooldown := 0
+
 	// Wow, this is a really ugly piece of code. I'm sorry.
 	go func() {
 		util.PrintInfo("Watching file:" + file + "...")
@@ -40,7 +43,9 @@ func Watch(file string, data chan<- string) {
 				if !ok {
 					return
 				}
-				if event.Op&fsnotify.Write == fsnotify.Write {
+				if event.Op&fsnotify.Write == fsnotify.Write && cooldown == 0 {
+					cooldown = 1
+					go cool(&cooldown)
 					util.PrintInfo("modified file:" + event.Name)
 					// Open the file at each write event
 
@@ -79,4 +84,9 @@ func Watch(file string, data chan<- string) {
 	// Wait for the signal to exit.
 	<-c
 	util.PrintInfo("Filewatcher: Cleaning up...")
+}
+
+func cool(i *int) {
+	time.Sleep(time.Second)
+	*i = 0
 }
