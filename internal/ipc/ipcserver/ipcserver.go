@@ -12,6 +12,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 
@@ -183,6 +184,8 @@ func NewIPCMessage(identifierKey string, messageType byte, data []byte) (*ipc.IP
 	identifier := modules.Mids.GetModuleIdentifier(identifierKey)
 	util.PrintDebug("NewIPCMessage from module with key: " + identifierKey)
 
+	messageId := fmt.Sprintf("%d-%s", time.Now().UnixNano(), identifierKey)
+
 	var id [4]byte
 	copy(id[:], identifier[:4]) // Ensure no out of bounds panic
 
@@ -192,6 +195,7 @@ func NewIPCMessage(identifierKey string, messageType byte, data []byte) (*ipc.IP
 	}
 
 	return &ipc.IPCRequest{
+		MessageSignature: []byte(messageId),
 		Header: ipc.IPCHeader{
 			Identifier:  id,
 			MessageType: messageType,
@@ -234,16 +238,6 @@ func parseMetadata(msg ipc.Metadata) (ipc.Metadata, bool) {
 	util.PrintItalic("Database name: " + msg.Destination.Object.Database.Name + "\nTable name: " + metadata.Destination.Object.Database.Table)
 
 	return metadata, true
-}
-
-// Parse the method/verb from the message
-func parseVerb(msg ipc.GenericData) string {
-	v := msg["metadata"].(map[string]interface{})["method"].(string)
-	if v == "" {
-		return "nil"
-	}
-	util.PrintSuccess("Verb: " + v)
-	return v
 }
 
 func getModel(tableName string) any {

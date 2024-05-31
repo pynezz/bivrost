@@ -36,35 +36,6 @@ var (
 	}
 )
 
-// func Testrun() {
-// 	util.PrintColorBold(util.DarkGreen, "Testing module data store connection...")
-// 	dbConf := gorm.Config{} // No config for now
-// 	db, err := InitDB("logs", dbConf)
-// 	if err != nil {
-// 		fmt.Println(err)
-// 	}
-
-// 	nginxLogDB, err := NewDataStore[models.NginxLog](db, "nginx_logs")
-
-// 	// AddStore[models.NginxLog]((*DataStore[any])(nginxLogDB)) // Specify the type explicitly
-
-// 	if err != nil {
-// 		fmt.Println(err)
-// 	}
-
-// 	// Insert a log
-// 	if err != nil {
-// 		if err != EnvironError {
-// 			fmt.Println(err)
-// 		}
-// 		util.PrintWarning("Log is an environment variable.")
-// 	}
-
-// 	if err := nginxLogDB.InsertLog(log); err != nil {
-// 		fmt.Println(err)
-// 	}
-// }
-
 func (s *DataStore[T]) Name() string {
 	return s.name
 }
@@ -170,7 +141,7 @@ func (s *DataStore[T]) insertBatch(batch []T) int {
 		" of type " + fmt.Sprintf("%T", batch[0]))
 
 	resString := fmt.Sprintf("SQL: %s\n", result.Statement.SQL.String())
-	util.PrintColorAndBg(util.LightGreen, util.BgGray, resString)
+	util.PrintColorAndBg(util.White, util.BgYellow, resString)
 
 	return int(result.RowsAffected)
 }
@@ -189,14 +160,9 @@ func (s *DataStore[T]) InsertBulk(logChan <-chan T, bulkSize int) error {
 	counter := 0
 
 	go func() {
-
-		// TODO: Fix close channel so that we can insert the rest of the logs
-		// (no worries for now, it will still insert them when it reaches 100 logs in the buffer)
 		defer close(done)
 		for log := range logChan {
 			counter++
-			// util.PrintColorAndBg(util.White, "\033[40m", "Inserting log: ")
-			// util.PrintColor(util.DarkCyan, string(log.ID))
 			buffer = append(buffer, log)
 			if counter%batchSize == 0 {
 				util.PrintColorAndBg(util.White, util.BgRed, "buffer limit reached, inserting batch...")
