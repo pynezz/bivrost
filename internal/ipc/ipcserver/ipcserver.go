@@ -253,6 +253,8 @@ func getModel(tableName string) any {
 			return models.GeoData{}
 		case models.GEO_LOCATION_DATA:
 			return models.GeoLocationData{}
+		case models.THREAT_RECORDS:
+			return models.ThreatRecord{}
 		default:
 			return nil
 		}
@@ -486,6 +488,8 @@ func tableToModel(tableName string) any {
 			return models.GeoData{}
 		case models.GEO_LOCATION_DATA:
 			return models.GeoLocationData{}
+		case models.THREAT_RECORDS:
+			return models.ThreatRecord{}
 		default:
 			return nil
 		}
@@ -494,22 +498,11 @@ func tableToModel(tableName string) any {
 }
 
 func (s *IPCServer) handlePost(m ipc.Metadata, data interface{}) {
-	// conn := s.conn
-
 	util.PrintBold("Got a POST request - inserting data...")
-	// Insert the data into the database
-	// byteData := d["Data"].([]byte)
-	// var logdata []ipc.GetJSON
-
-	// json.Unmarshal(byteData, &d)
-
-	// determineActualType(data)
 
 	databaseName := m.Destination.Object.Database.Name
 	tableName := m.Destination.Object.Database.Table
 
-	// wait := make(chan string)
-	// var message string
 	bytes, err := json.Marshal(data)
 	if err != nil {
 		util.PrintError("Failed to marshal the data: " + err.Error())
@@ -540,7 +533,6 @@ func (s *IPCServer) handlePost(m ipc.Metadata, data interface{}) {
 	}
 	fmt.Println("Field count: ", fields)
 
-	// TODO NEXT 1.0
 	marshalled, err := json.Marshal(data)
 	if err != nil {
 		util.PrintError("Failed to marshal the data: " + err.Error())
@@ -550,7 +542,6 @@ func (s *IPCServer) handlePost(m ipc.Metadata, data interface{}) {
 	case models.ATTACK_TYPE:
 		// Insert the data into the database
 		util.PrintDebug("Inserting data into the database...")
-		//TODO NEXT 1.1: Implement the insertion of the data into the database - even if the type is not AttackType
 		var tmpData []models.AttackType
 
 		json.Unmarshal(marshalled, &tmpData)
@@ -581,10 +572,13 @@ func (s *IPCServer) handlePost(m ipc.Metadata, data interface{}) {
 		var tmpData []models.GeoLocationData
 		json.Unmarshal(marshalled, &tmpData)
 		insertData[models.GeoLocationData](databaseName, tableName, tmpData)
+	case models.THREAT_RECORDS:
+		var tmpData []models.ThreatRecord
+		json.Unmarshal(marshalled, &tmpData)
+		insertData[models.ThreatRecord](databaseName, tableName, tmpData)
 	default:
 		// Insert the data into the database
 		util.PrintDebug("Unknown table name")
-
 	}
 
 	// Convert byte array to model type:
@@ -788,6 +782,33 @@ func insertData[StoreType any](databaseName, tableName string, data any) {
 			util.PrintError("Failed to insert the data: " + err.Error())
 		} else {
 			util.PrintSuccess("Data inserted successfully")
+		}
+	case models.THREAT_RECORDS:
+		var tmpData []models.ThreatRecord
+
+		// Might be unneccessary at this stage due to refactoring made in handlePost()
+		tmpBytes, err := json.Marshal(d)
+		if err != nil {
+			util.PrintError("failed to marshal the data " + err.Error())
+		}
+		err = json.Unmarshal(tmpBytes, &tmpData)
+		if err != nil {
+			util.PrintError("Failed to unmarshal the data: " + err.Error())
+		}
+
+		logsChannel := make(chan models.ThreatRecord)
+		go func() {
+			for _, log := range tmpData {
+				logsChannel <- log
+			}
+			close(logsChannel)
+		}()
+
+		err = s.ThreatRecordStore.InsertBulk(logsChannel, len(tmpData))
+		if err != nil {
+			util.PrintError("failed to insert threat records data " + err.Error())
+		} else {
+			util.PrintSuccess("Successfully inserted threat records")
 		}
 
 	default:
