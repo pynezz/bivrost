@@ -65,10 +65,6 @@ func Execute(isPackage bool, buildVersion string) {
 	termiui.Header.Color = util.Cyan
 	termiui.Header.PrintHeader()
 
-	// go termiui.Display()
-	// Create a channel to receive the log data
-	// termiui.AddDataSource(dataChan, "Watcher Output", util.Yellow) // Adding the file watcher output as a data source to the TUI
-
 	// Check for command line arguments
 	if len(os.Args) < 2 {
 		util.PrintWarning("No arguments provided. Use -h for help.")
@@ -77,10 +73,6 @@ func Execute(isPackage bool, buildVersion string) {
 		return
 	}
 
-	// util.PrintDebug("Testing Sigma rules...")
-	// sigma.Test()
-
-	// nginxDB, err := fetcher.ReadDB("logs")
 	gormConf := gorm.Config{
 		PrepareStmt:     true,
 		CreateBatchSize: 200,
@@ -88,37 +80,10 @@ func Execute(isPackage bool, buildVersion string) {
 		Logger: logger.Default.LogMode(logger.Silent),
 	}
 
-	// // logs.db
-	// logsDatabase, err := database.InitLogsDB(gormConf)
-	// if err != nil {
-	// 	fmt.Println(err)
-	// }
-
-	// // results.db
-	// modulesData, err := database.InitResultsDB(gormConf)
-	// if err != nil {
-	// 	fmt.Println(err)
-	// }
-
 	lineChan := make(chan string, 1000) // Buffer of 1000 lines
-	// logChan := make(chan models.NginxLog, 1000) // Buffer of 1000 logs
 	dataChan := make(chan string, 1000)
 
 	util.PrintBold("Testing module data store connection...")
-
-	// if err != nil {
-	// 	fmt.Println(err)
-	// }
-
-	// synTrafficRepo, _ := database.NewDataStore[models.SynTraffic](modulesData, "syntraffic")
-	// attackTypeRepo, _ := database.NewDataStore[models.AttackType](modulesData, "attacktype")
-	// indicatorsLogRepo, _ := database.NewDataStore[models.IndicatorsLog](modulesData, "indicatorslog")
-	// geoLocationDataRepo, _ := database.NewDataStore[models.GeoLocationData](modulesData, "geolocationdata")
-	// geoDataRepo, _ := database.NewDataStore[models.GeoData](modulesData, "geodata")
-	// nginxLogStore, err := database.NewDataStore[models.NginxLog](logsDatabase, "nginx_logs")
-
-	// util.PrintSuccess("Nginx log data store connection successful: " + modulesData.Name())
-	// util.PrintSuccess("Module data store connection successful: " + logsDatabase.Name())
 
 	s, err := stores.ImportAndInit(gormConf)
 	if err != nil {
@@ -145,7 +110,6 @@ func Execute(isPackage bool, buildVersion string) {
 	}
 
 	go logalyzer(dataChan, lineChan, logPath, s.NginxLogStore)
-	// nginxLogWorker(nginxLogStore, lineChan, logChan)
 
 	util.PrintDebug("Config path: " + *args.ConfigPath)
 	// Load the config
@@ -175,7 +139,6 @@ func Execute(isPackage bool, buildVersion string) {
 	}
 
 	// Testing the proto connection
-	// go testProtoConnection()
 	go testUDS()
 
 	// Connect to database
@@ -201,9 +164,8 @@ func Execute(isPackage bool, buildVersion string) {
 	app.Listen(":" + strconv.Itoa(port))
 
 	util.PrintItalic("[main.go] Waiting for SIGINT or SIGTERM... Press Ctrl+C to exit.")
-	util.PrintItalic("[main.go] Exiting...")
-	// // TODO: When done - move this to the bottom of the function
 	<-sigChan
+	util.PrintItalic("[main.go] Exiting...")
 }
 
 const dbPath = "users.db" // Testing purposes. This should be in the config file
@@ -263,23 +225,9 @@ func testUDS() {
 	util.PrintItalic("Waiting for SIGINT or SIGTERM... Press Ctrl+C to exit.")
 	<-c
 
-	// What a 'clever' naming this was...
 	ipcServer.CloseConn()
 	ipcserver.Cleanup()
 	fmt.Println("Done cleaning up. Exiting...")
-	// uds, err := connector.NewIPC("test", "Test socket")
-	// if err != nil {
-	// 	errorMsg := "main.go: could not connect to UNIX domain socket.\n" + err.Error()
-	// 	util.PrintError(errorMsg)
-	// 	return
-	// }
-
-	// util.PrintColor(util.BgCyan, "Connected to UNIX domain socket.")
-	// uds.Initialize()
-
-	// util.PrintColor(util.BgCyan, "Listening on UNIX domain socket...")
-
-	// uds.Listen()
 }
 
 func logalyzer(data chan string, lineChan chan string, log string, nginxLogStore *database.DataStore[models.NginxLog]) {
@@ -301,6 +249,7 @@ func logalyzer(data chan string, lineChan chan string, log string, nginxLogStore
 		// wg.Wait()
 		close(lineChan)
 		close(logChan)
+		util.PrintSuccess("logalyzer cleaned channels")
 	}()
 
 	// go func() {
