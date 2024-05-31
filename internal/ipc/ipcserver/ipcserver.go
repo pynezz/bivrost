@@ -240,28 +240,6 @@ func parseMetadata(msg ipc.Metadata) (ipc.Metadata, bool) {
 	return metadata, true
 }
 
-func getModel(tableName string) any {
-	for range models.GetModels() {
-		switch tableName {
-		case models.ATTACK_TYPE:
-			return models.AttackType{}
-		case models.NGINX_LOGS:
-			return models.NginxLog{}
-		case models.SYN_TRAFFIC:
-			return models.SynTraffic{}
-		case models.GEO_DATA:
-			return models.GeoData{}
-		case models.GEO_LOCATION_DATA:
-			return models.GeoLocationData{}
-		case models.THREAT_RECORDS:
-			return models.ThreatRecord{}
-		default:
-			return nil
-		}
-	}
-	return nil
-}
-
 type JsonResponse struct {
 	Metadata ipc.Metadata `json:"metadata"`
 	Data     interface{}  `json:"data"` //? Wait, I thought this was supposed to be an array of AttackDetail..?

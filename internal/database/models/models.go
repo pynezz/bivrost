@@ -13,6 +13,17 @@ func GetModels() []interface{} {
 	}
 }
 
+func GetModuleModels() []interface{} {
+	return []interface{}{
+		&SynTraffic{},
+		&AttackType{},
+		&IndicatorsLog{},
+		&GeoLocationData{},
+		&GeoData{},
+		&ThreatRecord{},
+	}
+}
+
 /*
 results.db
 

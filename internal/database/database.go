@@ -72,7 +72,8 @@ func InitResultsDB(config ...gorm.Config) (*gorm.DB, error) {
 		&models.AttackType{},
 		&models.IndicatorsLog{},
 		&models.GeoLocationData{},
-		&models.GeoData{})
+		&models.GeoData{},
+		&models.ThreatRecord{})
 	if err != nil {
 		fmt.Println(err)
 	}

@@ -143,7 +143,7 @@ func Get(storeName string) *Stores {
 func ImportAndInit(conf gorm.Config) (*Stores, error) {
 	initMap()
 	logdb, _ := database.InitDB("logs.db", conf, models.NginxLog{})
-	modulesdb, _ := database.InitDB("results.db", conf, models.SynTraffic{}, models.AttackType{}, models.IndicatorsLog{}, models.GeoLocationData{}, models.GeoData{})
+	modulesdb, _ := database.InitDB("results.db", conf, models.GetModuleModels()...)
 
 	s, err := new(logdb, modulesdb)
 	if err != nil {
