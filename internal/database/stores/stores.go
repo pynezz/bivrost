@@ -17,6 +17,7 @@ type Stores struct {
 	IndicatorsLogStore   *database.DataStore[models.IndicatorsLog]
 	GeoLocationDataStore *database.DataStore[models.GeoLocationData]
 	GeoDataStore         *database.DataStore[models.GeoData]
+	ThreatRecordStore    *database.DataStore[models.ThreatRecord]
 
 	// Add more stores here if neccessary
 	// One store per model (/ table in the/a database)
@@ -35,6 +36,7 @@ const (
 	INDICATORS_LOG    = "indicators_logs"
 	GEO_LOCATION_DATA = "geo_location_data"
 	GEO_DATA          = "geo_data"
+	THREAT_RECORDS    = "threat_records"
 )
 
 var (
@@ -76,12 +78,18 @@ func new(logDB, moduleDataDB *gorm.DB) (*Stores, error) {
 		return nil, err
 	}
 
+	threatRecordRepo, err := database.NewDataStore[models.ThreatRecord](moduleDataDB, THREAT_RECORDS)
+	if err != nil {
+		return nil, err
+	}
+
 	nginxLogStore.Type = models.NginxLog{}
 	synTrafficStore.Type = models.SynTraffic{}
 	indicatorsLogRepo.Type = models.IndicatorsLog{}
 	geoLocationDataRepo.Type = models.GeoLocationData{}
 	attackTypeRepo.Type = models.AttackType{}
 	geoDataRepo.Type = models.GeoData{}
+	threatRecordRepo.Type = models.ThreatRecord{}
 
 	util.PrintSuccess("assigned all store types")
 
@@ -92,6 +100,7 @@ func new(logDB, moduleDataDB *gorm.DB) (*Stores, error) {
 		IndicatorsLogStore:   indicatorsLogRepo,
 		GeoLocationDataStore: geoLocationDataRepo,
 		GeoDataStore:         geoDataRepo,
+		ThreatRecordStore:    threatRecordRepo,
 	}, nil
 }
 
@@ -110,21 +119,12 @@ func (s *Stores) Get(store string) *Stores {
 		return &Stores{GeoDataStore: s.GeoDataStore}
 	case ATTACK_TYPE:
 		return &Stores{AttackTypeStore: s.AttackTypeStore}
+	case THREAT_RECORDS:
+		return &Stores{ThreatRecordStore: s.ThreatRecordStore}
 	default:
 		return nil
 	}
 }
-
-// func ok() {
-// 	logdb, _ := database.InitDB("logs.db", gorm.Config{}, models.NginxLog{})
-// 	modulesdb, _ := database.InitDB("results.db", gorm.Config{}, models.SynTraffic{}, models.AttackType{}, models.IndicatorsLog{}, models.GeoLocationData{}, models.GeoData{})
-
-// 	s, _ := new(logdb, modulesdb)
-// 	n := s.Get("nginx_logs")
-
-// 	n.NginxLogStore.InsertLog(models.NginxLog{})
-
-// }
 
 func addToStoreMap(storeName string, store *Stores) {
 	StoreMap[storeName] = store
