@@ -164,6 +164,7 @@ func (s *Stores) Export() {
 	addToStoreMap("geolocationdata", s.Get(GEO_LOCATION_DATA))
 	addToStoreMap("geodata", s.Get(GEO_DATA))
 	addToStoreMap("attack_types", s.Get(ATTACK_TYPE))
+	addToStoreMap("threat_records", s.Get(THREAT_RECORDS))
 
 	util.PrintSuccess("Imported all stores")
 
