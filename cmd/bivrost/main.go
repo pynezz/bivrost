@@ -139,7 +139,7 @@ func Execute(isPackage bool, buildVersion string) {
 	}
 
 	// Testing the proto connection
-	go testUDS()
+	go unixDomainSockets()
 
 	// Connect to database
 	db, err := middleware.NewDBService().Connect(cfg.Database.Path)
@@ -208,7 +208,7 @@ func testDbConnection() {
 // 	connector.InitProtobuf(50051)
 // }
 
-func testUDS() {
+func unixDomainSockets() {
 	util.PrintInfo("Testing UNIX domain socket connection...")
 
 	c := make(chan os.Signal, 1)
@@ -219,7 +219,7 @@ func testUDS() {
 		return
 	}
 
-	// TODO: Check if this is more applicable: https://www.man7.org/linux/man-pages/man7/unix.7.html
+	// Listen for connections
 	go ipcServer.Listen()
 
 	util.PrintItalic("Waiting for SIGINT or SIGTERM... Press Ctrl+C to exit.")
@@ -237,7 +237,11 @@ func logalyzer(data chan string, lineChan chan string, log string, nginxLogStore
 	go fswatcher.Watch(log, data)
 
 	logChan := make(chan models.NginxLog)
+
+	// Parses from data and inserts the parsed logs into the logChan
 	go database.ParseBufferedNginxLog(data, logChan)
+
+	// Inserts 100 logs from logChan at a time
 	go nginxLogWorker(nginxLogStore, logChan, &wg)
 
 	for line := range data {

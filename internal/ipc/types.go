@@ -69,6 +69,11 @@ type GetJSON struct {
 	Description string   `json:"description"`
 }
 
+type MessageJSON struct {
+	Metadata    Metadata `json:"metadata"`
+	Description string   `json:"description"`
+}
+
 type ModuleState struct {
 	LastRowID int
 	// Add any other module-specific state here

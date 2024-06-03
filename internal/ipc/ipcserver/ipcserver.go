@@ -267,10 +267,6 @@ func parseData(msg *ipc.IPCMessage) (ipc.GenericData, JsonResponse) {
 		}
 		return data, jsonData
 
-		// getModel(msg.Data["Model"].(string))
-		// Get the model based on the table name
-		// handleGenericData(msg.Data)
-
 	case ipc.DATA_YAML:
 		// Parse the YAML data
 		fmt.Println("Data is YAML / generic data")
@@ -300,27 +296,6 @@ func parseData(msg *ipc.IPCMessage) (ipc.GenericData, JsonResponse) {
 	return data, jsonData
 }
 
-// func reflectType(t reflect.Type) string {
-// 	switch t.Name() {
-// 	case "AttackType":
-// 	case reflect.Int:
-// 		return "int"
-// 	case reflect.Bool:
-// 		return "bool"
-// 	case reflect.Float64:
-// 		return "float64"
-// 	case reflect.Slice:
-// 		return "slice"
-// 	case reflect.Map:
-// 		return "map"
-// 	case reflect.Struct:
-// 		return "struct"
-// 	default:
-// 		return "unknown"
-// 	}
-
-// }
-
 func handleGenericData( /* t reflect.Type, */ dataType any) {
 	// Handle the data
 	fmt.Println("Handling generic data...")
@@ -333,7 +308,6 @@ func handleGenericData( /* t reflect.Type, */ dataType any) {
 
 	gob.NewDecoder(bytes.NewReader(dataBytes)).Decode(&dataType)
 	fmt.Println("Data: ", dataType)
-
 }
 
 // handleConnection handles the incoming connection
@@ -382,14 +356,9 @@ func (s *IPCServer) handleConnection(c net.Conn) {
 			// If there is data to fetch, fetch it
 			if mData.Method == "GET" {
 
-				//BUG - 🐞: This seems to be caught in an infinite loop. Adding measures to inspect it with user intervention.
-				// var message string
-				// output := "[🐞] Buggy section ahead! Please read the outputs. press [enter] to continue..."
-				// fmt.Scanln(output, &message)
-
 				util.PrintBold("Got a GET request - fetching data...")
+
 				// Get the data source
-				// modules.ModuleConfig.DataSources[mData.Destination.Name].GetLogs("path", "filter")
 				databaseName := mData.Destination.Object.Database.Name
 				tableName := mData.Destination.Object.Database.Table
 
@@ -421,6 +390,7 @@ func (s *IPCServer) handleConnection(c net.Conn) {
 			}
 			if mData.Method == "POST" {
 				s.handlePost(mData, d.Data)
+				response = []byte("OK")
 			}
 		}
 
@@ -558,85 +528,9 @@ func (s *IPCServer) handlePost(m ipc.Metadata, data interface{}) {
 		// Insert the data into the database
 		util.PrintDebug("Unknown table name")
 	}
-
-	// Convert byte array to model type:
-	// determineActualType(marshalled, databaseName, tableName)
-
-	// switch t := data.(type) {
-	// case []models.AttackType:
-	// 	fmt.Println("Data is of type " + fmt.Sprintf("%T", t))
-	// 	fmt.Println("Data is of type []AttackType")
-	// 	insertData[[]models.AttackType](databaseName, tableName, data.(map[string]interface{}))
-	// case []models.NginxLog:
-	// 	fmt.Println("Data is of type []NginxLog")
-	// 	insertData[[]models.NginxLog](databaseName, tableName, data.(map[string]interface{}))
-	// case []models.SynTraffic:
-	// 	fmt.Println("Data is of type []SynTraffic")
-	// 	insertData[[]models.SynTraffic](databaseName, tableName, data.(map[string]interface{}))
-	// case []models.GeoData:
-	// 	fmt.Println("Data is of type []GeoData")
-	// 	insertData[[]models.GeoData](databaseName, tableName, data.(map[string]interface{}))
-	// case []models.GeoLocationData:
-	// 	fmt.Println("Data is of type []GeoLocationData")
-	// 	insertData[[]models.GeoLocationData](databaseName, tableName, data.(map[string]interface{}))
-	// case []ipc.GenericData:
-	// 	fmt.Println("Data is of type []GenericData")
-	// 	insertData[[]ipc.GenericData](databaseName, tableName, data.(map[string]interface{}))
-	// case []ipc.GetJSON:
-	// 	fmt.Println("Data is of type []GetJSON")
-	// 	insertData[[]ipc.GetJSON](databaseName, tableName, data.(map[string]interface{}))
-	// case models.AttackType:
-	// 	fmt.Println("Data is of type AttackType")
-	// 	insertData[models.AttackType](databaseName, tableName, data.(models.AttackType))
-	// case models.IndicatorsLog:
-	// 	fmt.Println("Data is of type IndicatorsLog")
-	// 	insertData[models.IndicatorsLog](databaseName, tableName, data.(models.IndicatorsLog))
-	// case map[models.AttackType]string:
-	// 	fmt.Println("Data is of type map[AttackType]string")
-	// 	insertData[map[models.AttackType]string](databaseName, tableName, data.(map[models.AttackType]string))
-	// case map[models.NginxLog]string:
-	// 	fmt.Println("Data is of type map[NginxLog]string")
-	// 	insertData[map[models.NginxLog]string](databaseName, tableName, data.(map[models.NginxLog]string))
-	// case map[models.SynTraffic]string:
-	// 	fmt.Println("Data is of type map[SynTraffic]string")
-	// 	insertData[map[models.SynTraffic]string](databaseName, tableName, data.(map[models.SynTraffic]string))
-	// case map[models.GeoData]string:
-	// 	fmt.Println("Data is of type map[GeoData]string")
-	// 	insertData[map[models.GeoData]string](databaseName, tableName, data.(map[models.GeoData]string))
-	// case map[models.GeoLocationData]string:
-	// 	fmt.Println("Data is of type map[GeoLocationData]string")
-	// 	insertData[map[models.GeoLocationData]string](databaseName, tableName, data.(map[models.GeoLocationData]string))
-	// case []map[models.AttackType]interface{}:
-	// 	fmt.Println("Data is of type []map[AttackType]interface{}")
-	// 	insertData[[]map[models.AttackType]interface{}](databaseName, tableName, data.(map[models.AttackType]interface{}))
-	// case []map[models.NginxLog]interface{}:
-	// 	fmt.Println("Data is of type []map[NginxLog]interface{}")
-	// 	insertData[[]map[models.NginxLog]interface{}](databaseName, tableName, data.(map[models.NginxLog]interface{}))
-	// case []map[models.SynTraffic]interface{}:
-	// 	fmt.Println("Data is of type []map[SynTraffic]interface{}")
-	// 	insertData[[]map[models.SynTraffic]interface{}](databaseName, tableName, data.(map[models.SynTraffic]interface{}))
-	// case []map[models.GeoData]interface{}:
-	// 	fmt.Println("Data is of type []map[GeoData]interface{}")
-	// 	insertData[[]map[models.GeoData]interface{}](databaseName, tableName, data.(map[models.GeoData]interface{}))
-	// case []map[models.GeoLocationData]interface{}:
-	// 	fmt.Println("Data is of type []map[GeoLocationData]interface{}")
-	// 	insertData[[]map[models.GeoLocationData]interface{}](databaseName, tableName, data.(map[models.GeoLocationData]interface{}))
-	// case []interface{}:
-	// 	fmt.Println("Data is of type []interface{}")
-
-	// 	//TODO NEXT 1.1: Implement the insertion of the data into the database - even if the type is not AttackType
-	// 	var tmpData []models.AttackType
-
-	// 	json.Unmarshal(marshalled, &tmpData)
-	// 	insertData[models.AttackType](databaseName, tableName, tmpData)
-	// 	// insertData[models.AttackType](databaseName, tableName, data.([]interface{}))
-
-	// default:
-	// 	fmt.Println("Data is of unknown type")
-	// }
 }
 
-// WIP: ❌ Tested - not working anymore..?
+// WIP: ✅ Tested - working again! 03.06.2024
 func insertData[StoreType any](databaseName, tableName string, data any) {
 	// Get the data store
 	d := data.([]StoreType)
@@ -673,7 +567,6 @@ func insertData[StoreType any](databaseName, tableName string, data any) {
 				logsChannel <- log
 			}
 			close(logsChannel)
-
 		}()
 
 		err = s.AttackTypeStore.InsertBulk(logsChannel, len(tmpData))
@@ -806,7 +699,6 @@ func fetchLatestLogData(ctx context.Context, tableName string) LogData {
 	if !ok {
 		// Handle the case where the value is not a map[string]*ModuleState
 		util.PrintDebug(" [modulestate] failed to get the module states map")
-
 		fmt.Scanln("Press [Enter] to continue...")
 
 		return LogData{}
@@ -837,7 +729,7 @@ func fetchLatestLogData(ctx context.Context, tableName string) LogData {
 		util.PrintError("[modulestate] failed to get all logs: " + err.Error())
 	}
 
-	util.PrintDebug(" [modulestate] getting all logs starting with " + fmt.Sprintf("%d", lastRowID) + "...")
+	util.PrintDebug("[modulestate] getting all logs starting with " + fmt.Sprintf("%d", lastRowID) + "...")
 	fmt.Scanln("Press [Enter] to continue...")
 
 	returnData := LogData{
@@ -868,18 +760,12 @@ func (s *IPCServer) CheckCRC32(req ipc.IPCRequest) bool {
 }
 
 // c is the connection to the client
-// req is the request from the client, but // TODO: It should be the request to the client
 func (s *IPCServer) respond(c net.Conn, data []byte, moduleId string) error {
 	util.PrintDebug("Responding to the client...")
 
 	var response *ipc.IPCRequest
 	var err error
-	// TODO: Implement different responses based on verbs/methods
-	// if verb == "GET" {
-	// 	response, err = NewIPCMessage(moduleId, ipc.MSG_MSG, data)
-	// } else if verb == "POST" {
-	// 	response, err = NewIPCMessage(moduleId, ipc.MSG_ACK, data)
-	// }
+
 	response, err = NewIPCMessage(moduleId, ipc.MSG_ACK, data)
 	if err != nil {
 		return err

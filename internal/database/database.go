@@ -148,6 +148,7 @@ func (s *DataStore[T]) insertBatch(batch []T) int {
 }
 
 // SQL TEST:  select id, remote_addr, time_local from nginx_logs where remote_addr and time_local is not null LIMIT 10;
+// TODO NEXT: Check for duplicates!
 func (s *DataStore[T]) InsertBulk(logChan <-chan T, bulkSize int) error {
 	var count int64
 	var batchSize int
@@ -160,9 +161,27 @@ func (s *DataStore[T]) InsertBulk(logChan <-chan T, bulkSize int) error {
 	done := make(chan struct{})
 	counter := 0
 
+	uniqueBuffer := make(chan T)
+
+	for log := range logChan {
+		uniqueBuffer <- log
+	}
+
+	uniqueLogChan, err := s.filterUniqueLogs(logChan, "timestamp", "remote_addr", "method")
+	if err != nil {
+		util.PrintWarning("woah, something happened while checking for unique logs in InsertBulk()!")
+	}
+
+	if len(uniqueBuffer) == 0 {
+		util.PrintWarning("No unique logs were found - skipping")
+		return nil
+	}
+	fmt.Printf("[NB] Length of unique buffer: %d\n", len(uniqueBuffer))
+
 	go func() {
 		defer close(done)
-		for log := range logChan {
+		for log := range uniqueLogChan {
+
 			counter++
 			buffer = append(buffer, log)
 			if counter%batchSize == 0 {
@@ -207,6 +226,49 @@ func (s *DataStore[T]) GetLogsByIP(ip string) ([]T, error) {
 	util.PrintInfo("Entries found: " + fmt.Sprintf("%d", len(entries)))
 
 	return entries, result.Error
+}
+
+// Filter unique logs
+//
+// Example:
+//
+//	filterUniqueLogs(logChan, "ID", "timestamp")
+func (s *DataStore[T]) filterUniqueLogs(logChan <-chan T, filter ...string) (<-chan T, error) {
+	outChan := make(chan T)
+
+	go func() {
+		defer close(outChan)
+
+		buffer := []T{}
+		identifiers := []interface{}{}
+
+		// Collect logs from the input channel
+		for log := range logChan {
+			buffer = append(buffer, log)
+			identifiers = append(identifiers, log) // Modify accordingly
+		}
+
+		// Perform a bulk query to find existing logs
+		var existingLogs []T
+		if err := s.db.Where(filter, " IN ?", identifiers).Find(&existingLogs).Error; err != nil {
+			util.PrintError("filter unique logs error - " + err.Error())
+		}
+
+		// Create a map to quickly check if a log exists
+		existingLogsMap := make(map[interface{}]bool)
+		for _, existingLog := range existingLogs {
+			existingLogsMap[existingLog] = true
+		}
+
+		// Filter out the logs that already exist
+		for _, log := range buffer {
+			if !existingLogsMap[log] {
+				outChan <- log
+			}
+		}
+	}()
+
+	return outChan, nil
 }
 
 func GetTableCount(db *gorm.DB, table string) (int64, error) {
