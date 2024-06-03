@@ -284,12 +284,12 @@ func nginxLogWorker(nginxLogStore *database.DataStore[models.NginxLog], logChan 
 
 	}
 
-	util.PrintBold("Processing parsed logs for storage...")
-	if err := nginxLogStore.InsertBulk(logChan, 100); err != nil {
-		util.PrintError("Failed to insert logs: " + err.Error())
-	} else {
-		util.PrintSuccess("Logs inserted successfully.")
-	}
+	// util.PrintBold("Processing parsed logs for storage...")
+	// if err := nginxLogStore.InsertBulk(logChan, 100); err != nil {
+	// 	util.PrintError("Failed to insert logs: " + err.Error())
+	// } else {
+	// 	util.PrintSuccess("Logs inserted successfully.")
+	// }
 
 	// for log := range logChan {
 	// 	util.PrintInfo("Processing parsed log for storage")

@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/pynezz/bivrost/internal/database/models"
 	"github.com/pynezz/bivrost/internal/util"
@@ -153,7 +154,7 @@ func (s *DataStore[T]) InsertBulk(logChan <-chan T, bulkSize int) error {
 	var count int64
 	var batchSize int
 	if bulkSize == 0 {
-		batchSize = 100
+		bulkSize = 100
 	}
 	batchSize = bulkSize // Should be a modulo of the amount of logs to insert
 
@@ -161,27 +162,38 @@ func (s *DataStore[T]) InsertBulk(logChan <-chan T, bulkSize int) error {
 	done := make(chan struct{})
 	counter := 0
 
-	uniqueBuffer := make(chan T)
+	uniqueBuffer := make(chan T, 100)
+	uniqueLogChan := make(chan T, 100)
 
-	for log := range logChan {
-		uniqueBuffer <- log
-	}
+	// var wg sync.WaitGroup
 
-	uniqueLogChan, err := s.filterUniqueLogs(logChan, "timestamp", "remote_addr", "method")
-	if err != nil {
-		util.PrintWarning("woah, something happened while checking for unique logs in InsertBulk()!")
-	}
-
-	if len(uniqueBuffer) == 0 {
-		util.PrintWarning("No unique logs were found - skipping")
-		return nil
-	}
-	fmt.Printf("[NB] Length of unique buffer: %d\n", len(uniqueBuffer))
+	ticker := time.NewTicker(time.Second * 20)
+	defer ticker.Stop() // Ensure the ticker is stopped to avoid leaks
 
 	go func() {
+		for range ticker.C {
+			fmt.Println("Currently holding ", len(uniqueBuffer), " unique values out of buffer", len(buffer))
+		}
+	}()
+
+	// wg.Add(1)
+	go func() {
+		// defer wg.Done()
+		for log := range logChan {
+			uniqueBuffer <- log
+		}
+		close(uniqueBuffer)
+	}()
+
+	s.filterUniqueLogs(uniqueBuffer, uniqueLogChan, "time_local", "remote_addr", "request")
+
+	// wg.Add(1)
+	go func() {
+		// defer wg.Done()
 		defer close(done)
 		for log := range uniqueLogChan {
-
+			fmt.Println("[DATABASE] counter: ", counter)
+			fmt.Printf("[DATABASE] counter %% batchsize = %d\n", counter%batchSize)
 			counter++
 			buffer = append(buffer, log)
 			if counter%batchSize == 0 {
@@ -201,6 +213,7 @@ func (s *DataStore[T]) InsertBulk(logChan <-chan T, bulkSize int) error {
 		util.PrintInfo("InsertBulk() finished inserting logs, closing buffer.")
 	}()
 
+	// wg.Wait()
 	return nil
 }
 
@@ -233,24 +246,28 @@ func (s *DataStore[T]) GetLogsByIP(ip string) ([]T, error) {
 // Example:
 //
 //	filterUniqueLogs(logChan, "ID", "timestamp")
-func (s *DataStore[T]) filterUniqueLogs(logChan <-chan T, filter ...string) (<-chan T, error) {
-	outChan := make(chan T)
+func (s *DataStore[T]) filterUniqueLogs(inChan <-chan T, outChan chan T, filter ...string) {
 
 	go func() {
-		defer close(outChan)
-
 		buffer := []T{}
 		identifiers := []interface{}{}
 
 		// Collect logs from the input channel
-		for log := range logChan {
+		for log := range inChan {
 			buffer = append(buffer, log)
 			identifiers = append(identifiers, log) // Modify accordingly
 		}
 
+		var selection string
+		for _, f := range filter {
+			selection += f
+		}
+
 		// Perform a bulk query to find existing logs
 		var existingLogs []T
-		if err := s.db.Where(filter, " IN ?", identifiers).Find(&existingLogs).Error; err != nil {
+		// 										 this is wrong
+		//   							        -------v-------
+		if err := s.db.Table(s.name).Where(s.name).Find(&existingLogs).Error; err != nil {
 			util.PrintError("filter unique logs error - " + err.Error())
 		}
 
@@ -267,8 +284,6 @@ func (s *DataStore[T]) filterUniqueLogs(logChan <-chan T, filter ...string) (<-c
 			}
 		}
 	}()
-
-	return outChan, nil
 }
 
 func GetTableCount(db *gorm.DB, table string) (int64, error) {

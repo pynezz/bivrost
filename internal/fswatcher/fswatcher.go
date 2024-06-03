@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sync"
 	"syscall"
 	"time"
 
@@ -30,6 +31,7 @@ func Watch(file string, data chan<- string) {
 
 	linePos := 0 // Variable to keep track of the last line read position
 	cooldown := 0
+	var m sync.Mutex
 
 	// Wow, this is a really ugly piece of code. I'm sorry.
 	go func() {
@@ -42,30 +44,45 @@ func Watch(file string, data chan<- string) {
 				if !ok {
 					return
 				}
-				if event.Op&fsnotify.Write == fsnotify.Write && cooldown == 0 {
-					cooldown = 1
-					go cool(&cooldown)
-					util.PrintInfo("modified file:" + event.Name)
-					// Open the file at each write event
+				if event.Op&fsnotify.Write == fsnotify.Write {
+					m.Lock()
+					if cooldown == 0 {
+						cooldown = 1
+						m.Unlock()
+						go cool(&cooldown, &m)
+						util.PrintInfo("modified file:" + event.Name)
 
-					f, err := os.Open(file)
-					if err != nil {
-						log.Println("error opening file:", err)
+						f, err := os.Open(file)
+						if err != nil {
+							log.Println("error opening file:", err)
+							continue
+						}
+						defer f.Close()
+
+						reader := bufio.NewReader(f)
+
+						// Skip already read lines
+						for i := 0; i < linePos; i++ {
+							_, _, err := reader.ReadLine()
+							if err != nil {
+								util.PrintError("encountered an error while reading line: " + err.Error())
+								break
+							}
+						}
+
+						// Read newly added data
+						for {
+							line, _, err := reader.ReadLine()
+							if err != nil {
+								break
+							}
+							data <- string(line) // Send new data to channel
+							util.PrintSuccess("[" + fmt.Sprintf("%d", linePos) + "] Read " + string(line) + " from file and inserted into channel.")
+							linePos++
+						}
+					} else {
+						m.Unlock()
 					}
-
-					scanner := bufio.NewScanner(f)
-
-					// Read newly added data
-					for i := 0; i < linePos; i++ {
-						scanner.Scan() // Skip the lines that have already been read
-					}
-
-					for scanner.Scan() {
-						data <- scanner.Text() // Send new data to channel
-						util.PrintSuccess("[" + fmt.Sprintf("%d", linePos) + "] Read " + scanner.Text() + " from file and inserted into channel.")
-						linePos++
-					}
-					f.Close()
 				}
 			case err, ok := <-watcher.Errors:
 				if !ok {
@@ -86,9 +103,13 @@ func Watch(file string, data chan<- string) {
 	util.PrintInfo("Filewatcher: Cleaning up...")
 }
 
-func cool(i *int) {
+func cool(cooldown *int, m *sync.Mutex) {
+	util.PrintDebug("[FILEWATCHER] 1 second cooldown...")
 	time.Sleep(time.Second)
-	*i = 0
+	m.Lock()
+	*cooldown = 0
+	m.Unlock()
+	util.PrintDebug("[FILEWATCHER] Cooldown ended.")
 }
 
 // If the passed file is a file, we want to watch the parent directory, and look for the file with event.Name()
