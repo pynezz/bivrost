@@ -31,7 +31,7 @@ func Watch(file string, data chan<- string) {
 
 	linePos := 0 // Variable to keep track of the last line read position
 	cooldown := 0
-	var m sync.Mutex
+	// var m sync.Mutex
 
 	// Wow, this is a really ugly piece of code. I'm sorry.
 	go func() {
@@ -42,14 +42,15 @@ func Watch(file string, data chan<- string) {
 				fmt.Println("event triggered: " + event.String())
 				fmt.Println("by: " + event.Op.String())
 				if !ok {
+					fmt.Println("NOOO")
 					return
 				}
 				if event.Op&fsnotify.Write == fsnotify.Write {
-					m.Lock()
+					// m.Lock()
 					if cooldown == 0 {
-						cooldown = 1
-						m.Unlock()
-						go cool(&cooldown, &m)
+						cooldown = 2
+						// m.Unlock()
+						// go cool(&cooldown, &m)
 						util.PrintInfo("modified file:" + event.Name)
 
 						f, err := os.Open(file)
@@ -62,13 +63,13 @@ func Watch(file string, data chan<- string) {
 						reader := bufio.NewReader(f)
 
 						// Skip already read lines
-						for i := 0; i < linePos; i++ {
-							_, _, err := reader.ReadLine()
-							if err != nil {
-								util.PrintError("encountered an error while reading line: " + err.Error())
-								break
-							}
-						}
+						// for i := 0; i < linePos; i++ {
+						// 	_, _, err := reader.ReadLine()
+						// 	if err != nil {
+						// 		util.PrintError("encountered an error while reading line: " + err.Error())
+						// 		break
+						// 	}
+						// }
 
 						// Read newly added data
 						for {
@@ -77,11 +78,11 @@ func Watch(file string, data chan<- string) {
 								break
 							}
 							data <- string(line) // Send new data to channel
-							util.PrintSuccess("[" + fmt.Sprintf("%d", linePos) + "] Read " + string(line) + " from file and inserted into channel.")
+							// util.PrintSuccess("[" + fmt.Sprintf("%d", linePos) + "] Read " + string(line) + " from file and inserted into channel.")
 							linePos++
 						}
 					} else {
-						m.Unlock()
+						// m.Unlock()
 					}
 				}
 			case err, ok := <-watcher.Errors:
@@ -104,7 +105,7 @@ func Watch(file string, data chan<- string) {
 }
 
 func cool(cooldown *int, m *sync.Mutex) {
-	util.PrintDebug("[FILEWATCHER] 1 second cooldown...")
+	util.PrintDebug("[FILEWATCHER] 2 second cooldown...")
 	time.Sleep(time.Second)
 	m.Lock()
 	*cooldown = 0

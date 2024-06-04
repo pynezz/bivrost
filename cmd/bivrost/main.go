@@ -245,7 +245,7 @@ func logalyzer(data chan string, lineChan chan string, log string, nginxLogStore
 	go nginxLogWorker(nginxLogStore, logChan, &wg)
 
 	for line := range data {
-		util.PrintInfo("Received line: " + line)
+		// util.PrintInfo("Received line: " + line)
 		lineChan <- line
 	}
 
@@ -277,11 +277,10 @@ func nginxLogWorker(nginxLogStore *database.DataStore[models.NginxLog], logChan 
 	timestamp := util.UnixNanoTimestamp()
 	var finalTime int64
 	util.PrintBold("Processing parsed logs for storage...")
-	if err := nginxLogStore.InsertBulk(logChan, 100); err != nil {
+	if err := nginxLogStore.InsertBulk(logChan, 10); err != nil {
 		util.PrintError("Failed to insert logs: " + err.Error())
 	} else {
 		util.PrintSuccess("Logs inserted successfully.")
-
 	}
 
 	// util.PrintBold("Processing parsed logs for storage...")
@@ -318,7 +317,8 @@ func nginxLogWorker(nginxLogStore *database.DataStore[models.NginxLog], logChan 
 
 	finalTime = util.UnixNanoTimestamp()
 	elapsed := finalTime - timestamp
-	util.PrintSuccess(fmt.Sprintf("Created 10k logs\n > %d µsec", elapsed/1000))
+	util.PrintSuccess("Created and inserted the logs in")
+	util.PrintSuccess(fmt.Sprintf(" > %d µsec", elapsed/1000))
 	util.PrintSuccess(fmt.Sprintf(" > %d msec", elapsed/1000000))
 	util.PrintSuccess(fmt.Sprintf(" > %d sec", elapsed/1000000000))
 	util.PrintSuccess(fmt.Sprintf(" > %d min", elapsed/1000000000/60))

@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/pynezz/bivrost/internal/database/models"
 	"github.com/pynezz/bivrost/internal/util"
@@ -133,19 +132,42 @@ func (s *DataStore[T]) InsertLog(log T) error {
 }
 
 func (s *DataStore[T]) insertBatch(batch []T) int {
-	result := s.db.Create(&batch)
-	if result.Error != nil {
-		util.PrintError("Failed to insert batch: " + result.Error.Error())
-	}
+	// result := s.db.Create(&batch)
+	// if result.Error != nil {
+	// 	util.PrintError("Failed to insert batch: " + result.Error.Error())
+	// }
+
+	result := s.db.FindInBatches(&batch, 10, func(tx *gorm.DB, batch int) error {
+		t := tx.CreateInBatches(tx, batch)
+		return t.Error
+	})
 
 	util.PrintSuccess("Inserted batch of size: " + fmt.Sprintf("%d", len(batch)) +
 		" into table: " + s.name +
-		" of type " + fmt.Sprintf("%T", batch[0]))
+		" of type " + fmt.Sprintf("%T", batch))
 
 	resString := fmt.Sprintf("SQL: %s\n", result.Statement.SQL.String())
 	util.PrintColorAndBg(util.White, util.BgYellow, resString)
 
 	return int(result.RowsAffected)
+}
+
+func logExists(db *gorm.DB, log any) bool {
+	l := log.(*models.NginxLog)
+
+	exists := db.Where(&models.NginxLog{
+		TimeLocal:     l.TimeLocal,
+		HttpUserAgent: l.HttpUserAgent,
+		BodyBytesSent: l.BodyBytesSent,
+		RemoteAddr:    l.RemoteAddr,
+	}).First(log)
+
+	if exists.Error == gorm.ErrRecordNotFound {
+		fmt.Println("log does not exist")
+		return false
+	}
+	fmt.Printf("[LOG EXIST CHECK] result: %v\n", exists)
+	return exists != nil
 }
 
 // SQL TEST:  select id, remote_addr, time_local from nginx_logs where remote_addr and time_local is not null LIMIT 10;
@@ -154,54 +176,76 @@ func (s *DataStore[T]) InsertBulk(logChan <-chan T, bulkSize int) error {
 	var count int64
 	var batchSize int
 	if bulkSize == 0 {
-		bulkSize = 100
+		batchSize = 100
 	}
 	batchSize = bulkSize // Should be a modulo of the amount of logs to insert
-
 	buffer := make([]T, 0)
 	done := make(chan struct{})
 	counter := 0
 
-	uniqueBuffer := make(chan T, 100)
-	uniqueLogChan := make(chan T, 100)
+	// uniqueBuffer := make(chan T, 100)
+	// uniqueLogChan := make(chan T, 100)
 
 	// var wg sync.WaitGroup
 
-	ticker := time.NewTicker(time.Second * 20)
-	defer ticker.Stop() // Ensure the ticker is stopped to avoid leaks
+	// ticker := time.NewTicker(time.Second * 20)
+	// defer ticker.Stop() // Ensure the ticker is stopped to avoid leaks
 
-	go func() {
-		for range ticker.C {
-			fmt.Println("Currently holding ", len(uniqueBuffer), " unique values out of buffer", len(buffer))
-		}
-	}()
+	// go func() {
+	// 	fmt.Println("ticker?")
+	// 	for range ticker.C {
+	// 		fmt.Println("Currently holding ", len(uniqueBuffer), " unique values out of buffer", len(buffer))
+	// 	}
+	// }()
 
 	// wg.Add(1)
-	go func() {
-		// defer wg.Done()
-		for log := range logChan {
-			uniqueBuffer <- log
-		}
-		close(uniqueBuffer)
-	}()
+	// go func() {
+	// 	// defer wg.Done()
+	// 	for log := range logChan {
+	// 		uniqueBuffer <- log
+	// 	}
+	// 	close(uniqueBuffer)
+	// 	fmt.Println("[🔌]closed unique buffer")
+	// }()
 
-	s.filterUniqueLogs(uniqueBuffer, uniqueLogChan, "time_local", "remote_addr", "request")
+	// fmt.Println("Logs: " + s.name)
+
+	if s.name == "nginx_logs" {
+		util.PrintDebug("Filtering unique nginx logs...")
+		// s.filterUniqueLogs(uniqueBuffer, uniqueLogChan, "time_local", "remote_addr", "request")
+	}
 
 	// wg.Add(1)
 	go func() {
 		// defer wg.Done()
 		defer close(done)
-		for log := range uniqueLogChan {
-			fmt.Println("[DATABASE] counter: ", counter)
-			fmt.Printf("[DATABASE] counter %% batchsize = %d\n", counter%batchSize)
-			counter++
-			buffer = append(buffer, log)
-			if counter%batchSize == 0 {
+		for log := range logChan {
+
+			if s.name == "nginx_logs" {
+				util.PrintDebug("Filtering unique nginx logs...")
+
+				if !logExists(s.db, &log) {
+					util.PrintSuccess("log does not exist")
+					buffer = append(buffer, log)
+					counter++
+				} else {
+					util.PrintDebug("log is duplicate")
+				}
+			} else {
+				counter++
+				buffer = append(buffer, log)
+			}
+
+			fmt.Println("[DATABASE] counter: ", len(buffer)+1)
+			fmt.Printf("[DATABASE] buffer length %% batchsize = %d\n", len(buffer)+1%batchSize)
+			if len(buffer)+1%batchSize == 0 {
 				util.PrintColorAndBg(util.White, util.BgRed, "buffer limit reached, inserting batch...")
 				count += int64(s.insertBatch(buffer))
 				buffer = make([]T, 0)
 			}
+			fmt.Printf("%d logs queued\n", len(logChan))
 		}
+		fmt.Println("done")
 	}()
 
 	go func() {
@@ -254,20 +298,25 @@ func (s *DataStore[T]) filterUniqueLogs(inChan <-chan T, outChan chan T, filter 
 
 		// Collect logs from the input channel
 		for log := range inChan {
+			fmt.Printf("[unique log filter] inChan log: %v\n", log)
 			buffer = append(buffer, log)
 			identifiers = append(identifiers, log) // Modify accordingly
 		}
 
+		fmt.Printf("checking %d logs for duplicates...\n", len(buffer))
 		var selection string
 		for _, f := range filter {
-			selection += f
+			selection += f + ", "
 		}
+		selection = selection[:len(selection)-3]
+
+		fmt.Printf("Checking duplicates against filter: %s", selection)
 
 		// Perform a bulk query to find existing logs
 		var existingLogs []T
 		// 										 this is wrong
 		//   							        -------v-------
-		if err := s.db.Table(s.name).Where(s.name).Find(&existingLogs).Error; err != nil {
+		if err := s.db.Table(s.name).Where(selection, "IN = ?", identifiers).Find(&existingLogs).Error; err != nil {
 			util.PrintError("filter unique logs error - " + err.Error())
 		}
 
@@ -275,6 +324,7 @@ func (s *DataStore[T]) filterUniqueLogs(inChan <-chan T, outChan chan T, filter 
 		existingLogsMap := make(map[interface{}]bool)
 		for _, existingLog := range existingLogs {
 			existingLogsMap[existingLog] = true
+			util.PrintWarning("Log exists: " + fmt.Sprintf("%v", existingLog))
 		}
 
 		// Filter out the logs that already exist
