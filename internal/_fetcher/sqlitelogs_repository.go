@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/pynezz/bivrost/internal/util"
+	"github.com/pynezz/pynezzentials/ansi"
 )
 
 var (
@@ -392,7 +392,7 @@ func (r *SQLiteLogsRepository) GetByIP(ip string) (NginxLogsList, error) {
 	var logs NginxLogsList                                                        // Just a slice of logs ([]NginxLog)
 	rows, err := r.db.Query(`SELECT * FROM nginx_logs WHERE remote_addr = ?`, ip) // ERROR: Query error: no such table: nginx_logs
 	if err != nil {
-		util.PrintError("Query error: " + err.Error())
+		ansi.PrintError("Query error: " + err.Error())
 		return logs, err
 	}
 
@@ -406,7 +406,7 @@ func (r *SQLiteLogsRepository) GetByIP(ip string) (NginxLogsList, error) {
 			&log.RequestBody,
 		)
 		if err != nil {
-			util.PrintError("Scan error: " + err.Error())
+			ansi.PrintError("Scan error: " + err.Error())
 			return logs, err
 		}
 

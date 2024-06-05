@@ -7,7 +7,8 @@ import (
 
 	"github.com/pynezz/bivrost/internal/database"
 	"github.com/pynezz/bivrost/internal/database/models"
-	"github.com/pynezz/bivrost/internal/util"
+
+	"github.com/pynezz/pynezzentials/ansi"
 )
 
 type Stores struct {
@@ -44,15 +45,15 @@ var (
 )
 
 func new(logDB, moduleDataDB *gorm.DB) (*Stores, error) {
-	util.PrintInfo("Initializing stores...")
+	ansi.PrintInfo("Initializing stores...")
 
-	util.PrintInfo("Initializing nginx_logs store...")
+	ansi.PrintInfo("Initializing nginx_logs store...")
 	nginxLogStore, err := database.NewDataStore[models.NginxLog](logDB, NGINX_LOGS)
 	if err != nil {
 		return nil, err
 	}
 
-	util.PrintInfo("Initializing syn_traffic store with table " + "syn_traffic")
+	ansi.PrintInfo("Initializing syn_traffic store with table " + "syn_traffic")
 	synTrafficStore, err := database.NewDataStore[models.SynTraffic](logDB, SYN_TRAFFIC)
 	if err != nil {
 		return nil, err
@@ -91,7 +92,7 @@ func new(logDB, moduleDataDB *gorm.DB) (*Stores, error) {
 	geoDataRepo.Type = models.GeoData{}
 	threatRecordRepo.Type = models.ThreatRecord{}
 
-	util.PrintSuccess("assigned all store types")
+	ansi.PrintSuccess("assigned all store types")
 
 	return &Stores{
 		NginxLogStore:        nginxLogStore,
@@ -105,7 +106,7 @@ func new(logDB, moduleDataDB *gorm.DB) (*Stores, error) {
 }
 
 func (s *Stores) Get(store string) *Stores {
-	util.PrintInfo("Getting store " + store + "...")
+	ansi.PrintInfo("Getting store " + store + "...")
 	switch store {
 	case NGINX_LOGS:
 		return &Stores{NginxLogStore: s.NginxLogStore}
@@ -132,7 +133,7 @@ func addToStoreMap(storeName string, store *Stores) {
 
 func initMap() {
 	StoreMap = make(map[string]*Stores)
-	util.PrintSuccess("initialized store map")
+	ansi.PrintSuccess("initialized store map")
 }
 
 // This is different from the other Get in the way that it's a getter for the StoreMap, rather than an exported method of the Stores struct
@@ -152,7 +153,7 @@ func ImportAndInit(conf gorm.Config) (*Stores, error) {
 
 	s.Export()
 
-	util.PrintSuccess("initialized all stores")
+	ansi.PrintSuccess("initialized all stores")
 	return s, nil
 }
 
@@ -166,12 +167,12 @@ func (s *Stores) Export() {
 	addToStoreMap("attack_types", s.Get(ATTACK_TYPE))
 	addToStoreMap("threat_records", s.Get(THREAT_RECORDS))
 
-	util.PrintSuccess("Imported all stores")
+	ansi.PrintSuccess("Imported all stores")
 
 }
 
 func Use(store string) (*Stores, error) {
-	util.PrintDebug("Using store " + store)
+	ansi.PrintDebug("Using store " + store)
 	if ok := StoreMap[store]; ok == nil {
 		return nil, fmt.Errorf("store %s not found", store)
 	}

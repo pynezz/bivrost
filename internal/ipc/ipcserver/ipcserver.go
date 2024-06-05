@@ -19,10 +19,12 @@ import (
 	"github.com/pynezz/bivrost/internal/database"
 	"github.com/pynezz/bivrost/internal/database/models"
 	"github.com/pynezz/bivrost/internal/database/stores"
-	"github.com/pynezz/bivrost/internal/fsutil"
 	"github.com/pynezz/bivrost/internal/ipc"
-	"github.com/pynezz/bivrost/internal/util"
 	"github.com/pynezz/bivrost/modules"
+
+	util "github.com/pynezz/pynezzentials"
+	"github.com/pynezz/pynezzentials/ansi"
+	"github.com/pynezz/pynezzentials/fsutil"
 )
 
 /* CONSTANTS
@@ -63,12 +65,12 @@ func init() {
 // It will parse the config file and add the modules to the server map
 func LoadModules(path string) {
 	if !fsutil.FileExists(path) {
-		util.PrintError("LoadModules(): File does not exist: " + path)
+		ansi.PrintError("LoadModules(): File does not exist: " + path)
 	}
-	util.PrintSuccess("File exists: " + path)
+	ansi.PrintSuccess("File exists: " + path)
 	f, err := os.Open(path)
 	if err != nil {
-		util.PrintError("LoadModules(): " + err.Error())
+		ansi.PrintError("LoadModules(): " + err.Error())
 		return
 	}
 	defer f.Close()
@@ -97,7 +99,7 @@ func LoadModules(path string) {
 		}
 
 		AddModule(parts[0], []byte(parts[1])) // Add module to the server
-		util.PrintColorf(util.LightCyan, "Loaded module: %s", parts[0])
+		ansi.PrintColorf(ansi.LightCyan, "Loaded module: %s", parts[0])
 	}
 }
 
@@ -110,7 +112,7 @@ func NewIPCServer(name string, identifier string) *IPCServer {
 
 	moduleStates := make(map[string]*ipc.ModuleState)
 
-	util.PrintColorf(util.LightCyan, "[SOCKETS] IPC server path: %s", path)
+	ansi.PrintColorf(ansi.LightCyan, "[SOCKETS] IPC server path: %s", path)
 
 	return &IPCServer{
 		path:         path,
@@ -123,31 +125,31 @@ func NewIPCServer(name string, identifier string) *IPCServer {
 // Add a new module identifier to the map
 func AddModule(identifier string, id []byte) {
 	if len(id) > 4 {
-		util.PrintError("AddModule(): Identifier length must be 4 bytes")
-		util.PrintInfo("Truncating the identifier to 4 bytes")
+		ansi.PrintError("AddModule(): Identifier length must be 4 bytes")
+		ansi.PrintInfo("Truncating the identifier to 4 bytes")
 		id = id[:4]
 	}
 	MODULEIDENTIFIERS[identifier] = id
 
-	util.PrintSuccess("added module:" + string(MODULEIDENTIFIERS[identifier]))
+	ansi.PrintSuccess("added module:" + string(MODULEIDENTIFIERS[identifier]))
 }
 
 // Set the server identifier to the SERVERIDENTIFIER variable
 func SetServerIdentifier(id []byte) {
 	if len(id) > 4 {
-		util.PrintError("SetServerIdentifier(): Identifier length must be 4 bytes")
-		util.PrintInfo("Truncating the identifier to 4 bytes")
+		ansi.PrintError("SetServerIdentifier(): Identifier length must be 4 bytes")
+		ansi.PrintInfo("Truncating the identifier to 4 bytes")
 		id = id[:4]
 	}
 	SERVERIDENTIFIER = [4]byte(id) // Convert the slice to an array
-	util.PrintSuccess("Set server identifier: " + string(SERVERIDENTIFIER[:]))
+	ansi.PrintSuccess("Set server identifier: " + string(SERVERIDENTIFIER[:]))
 }
 
 // Write a socket file and add it to the map
 func (s *IPCServer) InitServerSocket() bool {
 	// Making sure the socket is clean before starting
 	if err := os.RemoveAll(s.path); err != nil {
-		util.PrintError("InitServerSocket(): Failed to remove old socket: " + err.Error())
+		ansi.PrintError("InitServerSocket(): Failed to remove old socket: " + err.Error())
 		return false
 	}
 	return true
@@ -155,24 +157,24 @@ func (s *IPCServer) InitServerSocket() bool {
 
 // Creates a new listener on the socket path (which should be set in the config in the future)
 func (s *IPCServer) Listen() {
-	util.PrintColorBold(util.DarkGreen, "🎉 IPC server running!")
+	ansi.PrintColorBold(ansi.DarkGreen, "🎉 IPC server running!")
 	var err error
 	s.conn, err = net.Listen(AF_UNIX, s.path)
 	if err != nil {
-		util.PrintError("Listen(): " + err.Error())
+		ansi.PrintError("Listen(): " + err.Error())
 		return
 	}
-	util.PrintColorf(util.LightCyan, "[SOCKETS] Starting listener on %s", s.path)
+	ansi.PrintColorf(ansi.LightCyan, "[SOCKETS] Starting listener on %s", s.path)
 
 	for {
-		util.PrintDebug("Waiting for connection...")
-		util.PrintDebug("Network: " + s.conn.Addr().Network())
+		ansi.PrintDebug("Waiting for connection...")
+		ansi.PrintDebug("Network: " + s.conn.Addr().Network())
 
 		conn, err := s.conn.Accept()
-		util.PrintColorf(util.LightCyan, "[SOCKETS]: New connection from %s", conn.LocalAddr().String())
+		ansi.PrintColorf(ansi.LightCyan, "[SOCKETS]: New connection from %s", conn.LocalAddr().String())
 
 		if err != nil {
-			util.PrintError("Listen(): " + err.Error())
+			ansi.PrintError("Listen(): " + err.Error())
 			continue
 		}
 		go s.handleConnection(conn) // Handle the connection in a separate goroutine to handle multiple connections
@@ -182,7 +184,7 @@ func (s *IPCServer) Listen() {
 // Function to create a new IPCMessage based on the identifier key
 func NewIPCMessage(identifierKey string, messageType byte, data []byte) (*ipc.IPCRequest, error) {
 	identifier := modules.Mids.GetModuleIdentifier(identifierKey)
-	util.PrintDebug("NewIPCMessage from module with key: " + identifierKey)
+	ansi.PrintDebug("NewIPCMessage from module with key: " + identifierKey)
 
 	messageId := fmt.Sprintf("%d-%s", time.Now().UnixNano(), identifierKey)
 
@@ -234,8 +236,8 @@ func parseMetadata(msg ipc.Metadata) (ipc.Metadata, bool) {
 	}
 
 	sentence := fmt.Sprintf("\n %s wants to %s %s with id %s \n", metadata.Source, v, metadata.Destination.Object, metadata.Destination.Object.Id)
-	util.PrintBold(sentence)
-	util.PrintItalic("Database name: " + msg.Destination.Object.Database.Name + "\nTable name: " + metadata.Destination.Object.Database.Table)
+	ansi.PrintBold(sentence)
+	ansi.PrintItalic("Database name: " + msg.Destination.Object.Database.Name + "\nTable name: " + metadata.Destination.Object.Database.Table)
 
 	return metadata, true
 }
@@ -314,16 +316,16 @@ func handleGenericData( /* t reflect.Type, */ dataType any) {
 func (s *IPCServer) handleConnection(c net.Conn) {
 	// defer c.Close()
 
-	util.PrintColorf(util.LightCyan, "[SOCKETS] Handling connection...")
+	ansi.PrintColorf(ansi.LightCyan, "[SOCKETS] Handling connection...")
 
 	for {
 		inboundRequest, err := parseConnection(c)
 		if err != nil {
 			if err == io.EOF {
-				util.PrintDebug("Connection closed by client")
+				ansi.PrintDebug("Connection closed by client")
 				break
 			}
-			fmt.Println(util.Errorf("Error parsing request: " + err.Error()))
+			fmt.Println(ansi.Errorf("Error parsing request: " + err.Error()))
 			break
 		}
 
@@ -335,10 +337,10 @@ func (s *IPCServer) handleConnection(c net.Conn) {
 
 		moduleName := modules.Mids.GetModuleName(inboundRequest.Header.Identifier)
 		if moduleName == "" {
-			util.PrintColorf(util.LightRed, "[+] Added module name: %s", moduleName)
+			ansi.PrintColorf(ansi.LightRed, "[+] Added module name: %s", moduleName)
 			modules.Mids.StoreModuleIdentifier(string(inboundRequest.Header.Identifier[:]), inboundRequest.Header.Identifier)
 		} else {
-			util.PrintColorf(util.LightCyan, "Module name: %s", moduleName)
+			ansi.PrintColorf(ansi.LightCyan, "Module name: %s", moduleName)
 		}
 
 		source := fmt.Sprint(modules.Mids.GetModuleIdentifier(moduleName)) // Sorry about this (this should print the identifier of the module that sent the request)
@@ -349,21 +351,21 @@ func (s *IPCServer) handleConnection(c net.Conn) {
 		// Parse metadata
 		mData, ok := parseMetadata(d.Metadata)
 		if !ok {
-			util.PrintWarning("Metadata is nil")
+			ansi.PrintWarning("Metadata is nil")
 		} else {
-			util.PrintSuccess("Metadata: " + fmt.Sprintf("%v", mData))
+			ansi.PrintSuccess("Metadata: " + fmt.Sprintf("%v", mData))
 
 			// If there is data to fetch, fetch it
 			if mData.Method == "GET" {
 
-				util.PrintBold("Got a GET request - fetching data...")
+				ansi.PrintBold("Got a GET request - fetching data...")
 
 				// Get the data source
 				databaseName := mData.Destination.Object.Database.Name
 				tableName := mData.Destination.Object.Database.Table
 
 				// Get the data sources
-				util.PrintColorf(util.LightCyan, "Database: %s\nTable: %s", databaseName, tableName)
+				ansi.PrintColorf(ansi.LightCyan, "Database: %s\nTable: %s", databaseName, tableName)
 
 				// Ask database for the data
 				// TODO: Remember to make sure only the latest data is fetched
@@ -376,16 +378,16 @@ func (s *IPCServer) handleConnection(c net.Conn) {
 				latestData := fetchLatestLogData(ctx, tableName)
 
 				if latestData.data == nil {
-					util.PrintError("Source not found")
+					ansi.PrintError("Source not found")
 					response = []byte("Error, source not found")
 					// Respond with an error
-					util.PrintError("Failed to fetch the data")
+					ansi.PrintError("Failed to fetch the data")
 
 				} else {
 					// Get the logs
 					response = latestData.data
 					// Respond with the data
-					util.PrintSuccess("Data fetched successfully")
+					ansi.PrintSuccess("Data fetched successfully")
 				}
 			}
 			if mData.Method == "POST" {
@@ -395,7 +397,7 @@ func (s *IPCServer) handleConnection(c net.Conn) {
 		}
 
 		if err := reply(response, c, inboundRequest, s); err != nil {
-			util.PrintError("handleConnection: " + err.Error())
+			ansi.PrintError("handleConnection: " + err.Error())
 			return
 		}
 	}
@@ -408,13 +410,13 @@ func reply(response []byte, c net.Conn, inboundRequest ipc.IPCRequest, s *IPCSer
 	moduleId := string(inboundRequest.Header.Identifier[:]) // TODO: req.Header.Identifier is the server identifier, not the module identifier
 	if crcOk := s.CheckCRC32(inboundRequest); !crcOk {
 		response = []byte("CHKSUM ERROR")
-		util.PrintError("Checksum error")
+		ansi.PrintError("Checksum error")
 		return fmt.Errorf(string(response))
 	}
 
 	err = s.respond(c, response, moduleId)
 	if err != nil {
-		util.PrintError("handleConnection: " + err.Error())
+		ansi.PrintError("handleConnection: " + err.Error())
 		return err
 	}
 	responseTime(inboundRequest.Timestamp)
@@ -446,14 +448,14 @@ func tableToModel(tableName string) any {
 }
 
 func (s *IPCServer) handlePost(m ipc.Metadata, data interface{}) {
-	util.PrintBold("Got a POST request - inserting data...")
+	ansi.PrintBold("Got a POST request - inserting data...")
 
 	databaseName := m.Destination.Object.Database.Name
 	tableName := m.Destination.Object.Database.Table
 
 	bytes, err := json.Marshal(data)
 	if err != nil {
-		util.PrintError("Failed to marshal the data: " + err.Error())
+		ansi.PrintError("Failed to marshal the data: " + err.Error())
 		return
 	}
 	if len(bytes) > 100 {
@@ -462,7 +464,7 @@ func (s *IPCServer) handlePost(m ipc.Metadata, data interface{}) {
 		fmt.Println("Data: ", string(bytes))
 	}
 
-	util.PrintDebug("Key value pairs in the data object: ")
+	ansi.PrintDebug("Key value pairs in the data object: ")
 	// field := 0
 	fields := 0
 
@@ -483,13 +485,13 @@ func (s *IPCServer) handlePost(m ipc.Metadata, data interface{}) {
 
 	marshalled, err := json.Marshal(data)
 	if err != nil {
-		util.PrintError("Failed to marshal the data: " + err.Error())
+		ansi.PrintError("Failed to marshal the data: " + err.Error())
 	}
 
 	switch tableName {
 	case models.ATTACK_TYPE:
 		// Insert the data into the database
-		util.PrintDebug("Inserting data into the database...")
+		ansi.PrintDebug("Inserting data into the database...")
 		var tmpData []models.AttackType
 
 		json.Unmarshal(marshalled, &tmpData)
@@ -526,7 +528,7 @@ func (s *IPCServer) handlePost(m ipc.Metadata, data interface{}) {
 		insertData[models.ThreatRecord](databaseName, tableName, tmpData)
 	default:
 		// Insert the data into the database
-		util.PrintDebug("Unknown table name")
+		ansi.PrintDebug("Unknown table name")
 	}
 }
 
@@ -540,24 +542,24 @@ func insertData[StoreType any](databaseName, tableName string, data any) {
 
 		s := &database.DataStore[StoreType]{}
 
-		util.PrintError("Failed to get the data store: " + s.Name())
+		ansi.PrintError("Failed to get the data store: " + s.Name())
 	}
 
-	util.PrintDebug("Getting the data store...")
+	ansi.PrintDebug("Getting the data store...")
 
 	// Depending on the table name, insert the data into the database
 	switch tableName {
 	case models.ATTACK_TYPE:
 		// Insert the data into the database
-		util.PrintDebug("Inserting data into the database...")
+		ansi.PrintDebug("Inserting data into the database...")
 		var tmpData []models.AttackType
 		tmpBytes, err := json.Marshal(d)
 		if err != nil {
-			util.PrintError("Failed to marshal the data: " + err.Error())
+			ansi.PrintError("Failed to marshal the data: " + err.Error())
 		}
 		err = json.Unmarshal(tmpBytes, &tmpData)
 		if err != nil {
-			util.PrintError("Failed to unmarshal the data: " + err.Error())
+			ansi.PrintError("Failed to unmarshal the data: " + err.Error())
 		}
 
 		// fmt.Printf("Data: %v\n", tmpData)
@@ -571,9 +573,9 @@ func insertData[StoreType any](databaseName, tableName string, data any) {
 
 		err = s.AttackTypeStore.InsertBulk(logsChannel, len(tmpData))
 		if err != nil {
-			util.PrintError("Failed to insert the data: " + err.Error())
+			ansi.PrintError("Failed to insert the data: " + err.Error())
 		} else {
-			util.PrintSuccess("Data inserted successfully")
+			ansi.PrintSuccess("Data inserted successfully")
 		}
 
 	case models.NGINX_LOGS:
@@ -582,11 +584,11 @@ func insertData[StoreType any](databaseName, tableName string, data any) {
 		var tmpData []models.SynTraffic
 		tmpBytes, err := json.Marshal(d)
 		if err != nil {
-			util.PrintError("Failed to marshal the data: " + err.Error())
+			ansi.PrintError("Failed to marshal the data: " + err.Error())
 		}
 		err = json.Unmarshal(tmpBytes, &tmpData)
 		if err != nil {
-			util.PrintError("Failed to unmarshal the data: " + err.Error())
+			ansi.PrintError("Failed to unmarshal the data: " + err.Error())
 		}
 		logsChannel := make(chan models.SynTraffic)
 		go func() {
@@ -599,19 +601,19 @@ func insertData[StoreType any](databaseName, tableName string, data any) {
 
 		err = s.SynTrafficStore.InsertBulk(logsChannel, len(tmpData))
 		if err != nil {
-			util.PrintError("Failed to insert the data: " + err.Error())
+			ansi.PrintError("Failed to insert the data: " + err.Error())
 		} else {
-			util.PrintSuccess("Data inserted successfully")
+			ansi.PrintSuccess("Data inserted successfully")
 		}
 	case models.GEO_DATA:
 		var tmpData []models.GeoData
 		tmpBytes, err := json.Marshal(d)
 		if err != nil {
-			util.PrintError("Failed to marshal the data: " + err.Error())
+			ansi.PrintError("Failed to marshal the data: " + err.Error())
 		}
 		err = json.Unmarshal(tmpBytes, &tmpData)
 		if err != nil {
-			util.PrintError("Failed to unmarshal the data: " + err.Error())
+			ansi.PrintError("Failed to unmarshal the data: " + err.Error())
 		}
 
 		logsChannel := make(chan models.GeoData)
@@ -625,19 +627,19 @@ func insertData[StoreType any](databaseName, tableName string, data any) {
 
 		err = s.GeoDataStore.InsertBulk(logsChannel, len(tmpData))
 		if err != nil {
-			util.PrintError("Failed to insert the data: " + err.Error())
+			ansi.PrintError("Failed to insert the data: " + err.Error())
 		} else {
-			util.PrintSuccess("Data inserted successfully")
+			ansi.PrintSuccess("Data inserted successfully")
 		}
 	case models.GEO_LOCATION_DATA:
 		var tmpData []models.GeoLocationData
 		tmpBytes, err := json.Marshal(d)
 		if err != nil {
-			util.PrintError("Failed to marshal the data: " + err.Error())
+			ansi.PrintError("Failed to marshal the data: " + err.Error())
 		}
 		err = json.Unmarshal(tmpBytes, &tmpData)
 		if err != nil {
-			util.PrintError("Failed to unmarshal the data: " + err.Error())
+			ansi.PrintError("Failed to unmarshal the data: " + err.Error())
 		}
 		logsChannel := make(chan models.GeoLocationData)
 		go func() {
@@ -650,9 +652,9 @@ func insertData[StoreType any](databaseName, tableName string, data any) {
 
 		err = s.GeoLocationDataStore.InsertBulk(logsChannel, len(tmpData))
 		if err != nil {
-			util.PrintError("Failed to insert the data: " + err.Error())
+			ansi.PrintError("Failed to insert the data: " + err.Error())
 		} else {
-			util.PrintSuccess("Data inserted successfully")
+			ansi.PrintSuccess("Data inserted successfully")
 		}
 	case models.THREAT_RECORDS:
 		var tmpData []models.ThreatRecord
@@ -660,11 +662,11 @@ func insertData[StoreType any](databaseName, tableName string, data any) {
 		// Might be unneccessary at this stage due to refactoring made in handlePost()
 		tmpBytes, err := json.Marshal(d)
 		if err != nil {
-			util.PrintError("failed to marshal the data " + err.Error())
+			ansi.PrintError("failed to marshal the data " + err.Error())
 		}
 		err = json.Unmarshal(tmpBytes, &tmpData)
 		if err != nil {
-			util.PrintError("Failed to unmarshal the data: " + err.Error())
+			ansi.PrintError("Failed to unmarshal the data: " + err.Error())
 		}
 
 		logsChannel := make(chan models.ThreatRecord)
@@ -677,13 +679,13 @@ func insertData[StoreType any](databaseName, tableName string, data any) {
 
 		err = s.ThreatRecordStore.InsertBulk(logsChannel, len(tmpData))
 		if err != nil {
-			util.PrintError("failed to insert threat records data " + err.Error())
+			ansi.PrintError("failed to insert threat records data " + err.Error())
 		} else {
-			util.PrintSuccess("Successfully inserted threat records")
+			ansi.PrintSuccess("Successfully inserted threat records")
 		}
 
 	default:
-		util.PrintError("Table not found: " + tableName)
+		ansi.PrintError("Table not found: " + tableName)
 	}
 }
 
@@ -698,7 +700,7 @@ func fetchLatestLogData(ctx context.Context, tableName string) LogData {
 	moduleStatesMap, ok := ctx.Value(tableToModel(tableName)).(map[string]*ipc.ModuleState)
 	if !ok {
 		// Handle the case where the value is not a map[string]*ModuleState
-		util.PrintDebug(" [modulestate] failed to get the module states map")
+		ansi.PrintDebug(" [modulestate] failed to get the module states map")
 		fmt.Scanln("Press [Enter] to continue...")
 
 		return LogData{}
@@ -711,10 +713,10 @@ func fetchLatestLogData(ctx context.Context, tableName string) LogData {
 		moduleStatesMap[tableName] = moduleState
 	}
 	// Get the data from the database
-	util.PrintDebug(" [modulestate] fetching the latest log data...")
+	ansi.PrintDebug(" [modulestate] fetching the latest log data...")
 	s, err := stores.Use(tableName)
 	if err != nil {
-		util.PrintError(" [modulestate] failed to get the data store: " + s.NginxLogStore.Name())
+		ansi.PrintError(" [modulestate] failed to get the data store: " + s.NginxLogStore.Name())
 	}
 
 	// Use a read lock to safely read the LastRowID
@@ -722,14 +724,14 @@ func fetchLatestLogData(ctx context.Context, tableName string) LogData {
 	lastRowID := moduleState.LastRowID
 	moduleState.RUnlock()
 
-	util.PrintDebug("Getting the data store...")
+	ansi.PrintDebug("Getting the data store...")
 
 	logs, err := s.NginxLogStore.GetLogRangeFromID(lastRowID) // The store is also an issue here....
 	if err != nil {
-		util.PrintError("[modulestate] failed to get all logs: " + err.Error())
+		ansi.PrintError("[modulestate] failed to get all logs: " + err.Error())
 	}
 
-	util.PrintDebug("[modulestate] getting all logs starting with " + fmt.Sprintf("%d", lastRowID) + "...")
+	ansi.PrintDebug("[modulestate] getting all logs starting with " + fmt.Sprintf("%d", lastRowID) + "...")
 	fmt.Scanln("Press [Enter] to continue...")
 
 	returnData := LogData{
@@ -739,14 +741,14 @@ func fetchLatestLogData(ctx context.Context, tableName string) LogData {
 
 	returnData.data, err = json.Marshal(&logs)
 	if err != nil {
-		util.PrintError("Failed to marshal the logs: " + err.Error())
+		ansi.PrintError("Failed to marshal the logs: " + err.Error())
 	}
 
 	moduleState.Lock()
 	moduleState.LastRowID += len(logs) // Also a bug was here (+ len(logs) instead of += len(logs))
 	moduleState.Unlock()
-	util.PrintDebug(" [modulestate] updated the last row ID to " + fmt.Sprintf("%d", moduleState.LastRowID))
-	util.PrintDebug(" [modulestate] Returning the data...")
+	ansi.PrintDebug(" [modulestate] updated the last row ID to " + fmt.Sprintf("%d", moduleState.LastRowID))
+	ansi.PrintDebug(" [modulestate] Returning the data...")
 	fmt.Scanln("Press [Enter] to continue...")
 	return returnData
 }
@@ -761,7 +763,7 @@ func (s *IPCServer) CheckCRC32(req ipc.IPCRequest) bool {
 
 // c is the connection to the client
 func (s *IPCServer) respond(c net.Conn, data []byte, moduleId string) error {
-	util.PrintDebug("Responding to the client...")
+	ansi.PrintDebug("Responding to the client...")
 
 	var response *ipc.IPCRequest
 	var err error
@@ -782,7 +784,7 @@ func (s *IPCServer) respond(c net.Conn, data []byte, moduleId string) error {
 	if err != nil {
 		return err
 	}
-	util.PrintColor(util.BgGreen, "🚀 Response sent!")
+	ansi.PrintColor(ansi.BgGreen, "🚀 Response sent!")
 
 	return nil
 }
@@ -818,15 +820,15 @@ func responseTime(reqTime int64) {
 
 func NewIPCID(identifier string, id []byte) {
 	if len(id) > 4 {
-		util.PrintError("NewIPCID(): Identifier length must be 4 bytes")
-		util.PrintInfo("Truncating the identifier to 4 bytes")
+		ansi.PrintError("NewIPCID(): Identifier length must be 4 bytes")
+		ansi.PrintInfo("Truncating the identifier to 4 bytes")
 		id = id[:4]
 	}
 	ipc.SetIPCID(id)
 }
 
 func Cleanup() {
-	util.PrintItalic("\t... IPC server cleanup complete.")
+	ansi.PrintItalic("\t... IPC server cleanup complete.")
 }
 
 func crc(b []byte) uint32 {

@@ -11,8 +11,8 @@ import (
 	"path"
 	"time"
 
-	"github.com/pynezz/bivrost/internal/fsutil"
-	"github.com/pynezz/bivrost/internal/util"
+	"github.com/pynezz/pynezzentials/ansi"
+	"github.com/pynezz/pynezzentials/fsutil"
 )
 
 const (
@@ -35,9 +35,9 @@ type IPCMessageId []byte // Identifier of the message
 func SetIPCID(id []byte) {
 	if IPCID == nil {
 		IPCID = id
-		util.PrintSuccess("Set IPC ID to " + string(IPCID))
+		ansi.PrintSuccess("Set IPC ID to " + string(IPCID))
 	} else {
-		util.PrintWarning("IPC ID already set to " + string(IPCID))
+		ansi.PrintWarning("IPC ID already set to " + string(IPCID))
 	}
 }
 

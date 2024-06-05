@@ -7,8 +7,8 @@ import (
 
 	"github.com/pynezz/bivrost/internal/config"
 	"github.com/pynezz/bivrost/internal/middleware"
-	"github.com/pynezz/bivrost/internal/util"
-	"github.com/pynezz/bivrost/internal/util/cryptoutils"
+	"github.com/pynezz/pynezzentials/ansi"
+	"github.com/pynezz/pynezzentials/cryptoutils"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/logger"
@@ -57,9 +57,9 @@ func NewServer(cfg *config.Cfg) *fiber.App {
 	app.Use(logger.New()) // Log every request
 
 	fmt.Printf("Secret key: %s%s%s\n",
-		util.LightYellow, argon2Instance.GetPrintableKeyWithSalt(argon2Instance.Salt), util.Reset)
+		ansi.LightYellow, argon2Instance.GetPrintableKeyWithSalt(argon2Instance.Salt), ansi.Reset)
 
-	fmt.Printf("Argon2 hash: %s%s%s\n", util.LightYellow, argon2Instance.GetEncodedHash(), util.Reset)
+	fmt.Printf("Argon2 hash: %s%s%s\n", ansi.LightYellow, argon2Instance.GetEncodedHash(), ansi.Reset)
 
 	// Group routes for the dashboard and every child route
 	protectedDash := app.Group("/dashboard", middleware.Bouncer())
@@ -125,13 +125,13 @@ func setupRoutes(app *fiber.App, cfg *config.Cfg) {
 		// Serialize the request body to a struct
 		var configRequest ConfigRequest
 		if err := c.BodyParser(&configRequest.Fields.Sources); err != nil {
-			util.PrintError("Error parsing request body: " + err.Error())
+			ansi.PrintError("Error parsing request body: " + err.Error())
 			return err
 		}
 
 		updatedFields := c.Body()
 
-		fmt.Println("ID" + util.ColorF(util.DarkYellow, "%s", updatedFields))
+		fmt.Println("ID" + ansi.ColorF(ansi.DarkYellow, "%s", updatedFields))
 
 		// TODO: Check if this works
 		config.WriteConfig(cfg, "config.yaml")

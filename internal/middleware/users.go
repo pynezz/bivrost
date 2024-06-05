@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pynezz/bivrost/internal/util"
+	"github.com/pynezz/pynezzentials/ansi"
 )
 
 // path: internal/middleware/users/users.go
@@ -237,7 +237,7 @@ func GetUserByID(id string) User {
 		)
 
 	if err != nil {
-		util.PrintError("GetUserByID: " + err.Error())
+		ansi.PrintError("GetUserByID: " + err.Error())
 	}
 	return user
 }
@@ -257,7 +257,7 @@ func GetUserByDisplayName(displayname string) User { // Displayname is used to l
 		return user
 	}
 
-	util.PrintDebug("SelectCol: " + instance.SelectCol(UCDisplayName, UClike) + displayname + "#" + "%")
+	ansi.PrintDebug("SelectCol: " + instance.SelectCol(UCDisplayName, UClike) + displayname + "#" + "%")
 
 	err := instance.Driver.QueryRow(instance.SelectCol(UCDisplayName, UClike), displayname+"#"+"%").
 		Scan(
@@ -268,7 +268,7 @@ func GetUserByDisplayName(displayname string) User { // Displayname is used to l
 		)
 
 	if err != nil {
-		util.PrintError("GetUserByDisplayName: " + err.Error())
+		ansi.PrintError("GetUserByDisplayName: " + err.Error())
 		return user
 	}
 	return user
@@ -283,21 +283,21 @@ func GetPasswordHash(userId uint64) (PasswordAuth, error) {
 	}
 
 	// SELECT PasswordHash FROM password_auth WHERE UserID = ?
-	util.PrintDebug("Getting password hash for user with ID: " + strconv.FormatUint(userId, 10))
+	ansi.PrintDebug("Getting password hash for user with ID: " + strconv.FormatUint(userId, 10))
 	instance := GetDBInstance()
 	if instance.Driver == nil {
 		return pwAuth, fmt.Errorf("Database driver is nil")
 	}
 	rows, err := instance.Fetch(instance.GetPasswordHashQuery(), userId)
 	if err != nil {
-		util.PrintError("GetPasswordHash: " + err.Error())
+		ansi.PrintError("GetPasswordHash: " + err.Error())
 		return pwAuth, err
 	}
 
 	if rows.Next() {
 		err = rows.Scan(&pwAuth.PasswordHash)
 		if err != nil {
-			util.PrintError("GetPasswordHash: " + err.Error())
+			ansi.PrintError("GetPasswordHash: " + err.Error())
 			return pwAuth, err
 		}
 	}
@@ -388,7 +388,7 @@ func GetPlaceholderImage(params PlaceholderImage) string {
 // UpdateLastLoginTime updates the last login time of a user
 // It returns the amount of affected rows, or an error
 func UpdateLastLoginTime(userId uint64) (sql.Result, error) {
-	util.PrintDebug("Updating last login time for user with ID: " + strconv.FormatUint(userId, 10))
+	ansi.PrintDebug("Updating last login time for user with ID: " + strconv.FormatUint(userId, 10))
 
 	// UPDATE users SET LastLogin = datetime('now') WHERE DisplayName = ?
 	// var instance Database
@@ -397,12 +397,12 @@ func UpdateLastLoginTime(userId uint64) (sql.Result, error) {
 		return nil, fmt.Errorf("Database driver is nil")
 	}
 
-	util.PrintDebug("writing to database")
+	ansi.PrintDebug("writing to database")
 	result, err := instance.Write(
 		fmt.Sprintf("UPDATE users SET LastLogin = '%s' WHERE UserID = ?", time.Now().Format("2006-01-02 15:04:05")), userId)
 
 	if err != nil {
-		util.PrintError("UpdateLastLoginTime: " + err.Error())
+		ansi.PrintError("UpdateLastLoginTime: " + err.Error())
 		return nil, err
 	}
 
@@ -453,7 +453,7 @@ func LoginSucessJSON(u User, jwt string) string {
 	}
 	json, err := json.Marshal(response)
 	if err != nil {
-		util.PrintError("LoginSuccessJSON: " + err.Error())
+		ansi.PrintError("LoginSuccessJSON: " + err.Error())
 		return ""
 	}
 

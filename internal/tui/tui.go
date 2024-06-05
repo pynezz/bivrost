@@ -7,7 +7,7 @@ import (
 
 	ui "github.com/gizak/termui/v3"
 	"github.com/gizak/termui/v3/widgets"
-	"github.com/pynezz/bivrost/internal/util"
+	"github.com/pynezz/pynezzentials/ansi"
 )
 
 type HeaderStruct struct {
@@ -85,7 +85,7 @@ func AsciiArt() string {
 
 // Should be used in conjunction with the util package for proper formatting
 func (h *HeaderStruct) ColorHeader(color string) string {
-	return util.ColorF(color, h.Content, h.Version)
+	return ansi.ColorF(color, h.Content, h.Version)
 }
 
 func (h *HeaderStruct) PrintHeader() {

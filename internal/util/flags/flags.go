@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/pynezz/bivrost/internal/util"
 	"github.com/pynezz/bivrost/pkg/version"
+	"github.com/pynezz/pynezzentials/ansi"
 )
 
 type Arguments struct {
@@ -113,11 +113,11 @@ func ParseFlags() *Arguments {
 		}
 
 	case *testFlag != "":
-		util.PrintWarning("Test flag is set: " + *testFlag)
+		ansi.PrintWarning("Test flag is set: " + *testFlag)
 		Params.Test = testFlag
 
 	default:
-		util.PrintWarning("This should not happen. Please report this issue.") // It should be taken care of in main.go
+		ansi.PrintWarning("This should not happen. Please report this issue.") // It should be taken care of in main.go
 	}
 
 	return &Params

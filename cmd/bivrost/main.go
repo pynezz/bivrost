@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"sync"
 	"syscall"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 	"gorm.io/gorm"
@@ -17,14 +18,16 @@ import (
 	"github.com/pynezz/bivrost/internal/api"
 	"github.com/pynezz/bivrost/internal/config"
 	"github.com/pynezz/bivrost/internal/database"
-	"github.com/pynezz/bivrost/internal/fsutil"
 	"github.com/pynezz/bivrost/internal/fswatcher"
 	"github.com/pynezz/bivrost/internal/ipc/ipcserver"
 	"github.com/pynezz/bivrost/internal/middleware"
 	"github.com/pynezz/bivrost/internal/tui"
-	"github.com/pynezz/bivrost/internal/util"
 	"github.com/pynezz/bivrost/internal/util/flags"
 	"github.com/pynezz/bivrost/modules"
+
+	util "github.com/pynezz/pynezzentials"
+	"github.com/pynezz/pynezzentials/ansi"
+	"github.com/pynezz/pynezzentials/fsutil"
 
 	"github.com/pynezz/bivrost/internal/database/models"
 	"github.com/pynezz/bivrost/internal/database/stores"
@@ -41,6 +44,8 @@ import (
 // 7. It initializes the Fiber server with the configuration values.
 // 8. It sets the port to 3000 if the configuration file does not specify a port.
 
+var dbCreateBatchSize = 100
+
 func Execute(isPackage bool, buildVersion string) {
 	// Parse the command line arguments (flags)
 	if !isPackage {
@@ -48,8 +53,8 @@ func Execute(isPackage bool, buildVersion string) {
 	}
 
 	args := flags.ParseFlags()
-	util.PrintInfo(" > Config path: " + *args.ConfigPath)
-	util.PrintInfo(" > Log path: " + *args.LogPath)
+	ansi.PrintInfo(" > Config path: " + *args.ConfigPath)
+	ansi.PrintInfo(" > Log path: " + *args.LogPath)
 
 	// Setting up signal handling to catch CTRL+C and other termination signals
 	sigChan := make(chan os.Signal, 1)
@@ -62,12 +67,12 @@ func Execute(isPackage bool, buildVersion string) {
 	}()
 
 	termiui := tui.NewTui(buildVersion)
-	termiui.Header.Color = util.Cyan
+	termiui.Header.Color = ansi.Cyan
 	termiui.Header.PrintHeader()
 
 	// Check for command line arguments
 	if len(os.Args) < 2 {
-		util.PrintWarning("No arguments provided. Use -h for help.")
+		ansi.PrintWarning("No arguments provided. Use -h for help.")
 
 		flag.Usage()
 		return
@@ -75,15 +80,15 @@ func Execute(isPackage bool, buildVersion string) {
 
 	gormConf := gorm.Config{
 		PrepareStmt:     true,
-		CreateBatchSize: 200,
+		CreateBatchSize: dbCreateBatchSize,
 
 		Logger: logger.Default.LogMode(logger.Silent),
 	}
 
-	lineChan := make(chan string, 1000) // Buffer of 1000 lines
-	dataChan := make(chan string, 1000)
+	lineChan := make(chan string, dbCreateBatchSize) // Buffer of 1000 lines
+	dataChan := make(chan string, dbCreateBatchSize)
 
-	util.PrintBold("Testing module data store connection...")
+	ansi.PrintBold("Testing module data store connection...")
 
 	s, err := stores.ImportAndInit(gormConf)
 	if err != nil {
@@ -99,7 +104,8 @@ func Execute(isPackage bool, buildVersion string) {
 	if len(idOneLog) == 0 {
 		fmt.Println("No logs found for IP: ", randIP)
 	} else {
-		fmt.Println("ID 1 log: ", idOneLog[0])
+		fmt.Println("ID 1 log: ", idOneLog[0].ID)
+		fmt.Printf("with %d fields containing the ip\n", len(idOneLog))
 	}
 
 	// nginxLogPath := "/var/log/nginx/access.log"
@@ -109,21 +115,21 @@ func Execute(isPackage bool, buildVersion string) {
 		logPath = *args.LogPath
 	}
 
+	fmt.Println("analyzing log " + logPath)
+
 	go logalyzer(dataChan, lineChan, logPath, s.NginxLogStore)
 
-	util.PrintDebug("Config path: " + *args.ConfigPath)
+	ansi.PrintDebug("Config path: " + *args.ConfigPath)
 	// Load the config
 	cfg, err := config.LoadConfig(*flags.Params.ConfigPath)
 	if err != nil {
-		fmt.Println(err)
-		fmt.Println("Exiting...")
+		ansi.PrintError("[bivrost|main.go] " + err.Error() + "\nExiting...")
 		return
 	}
 
 	err = modules.LoadModules(*cfg)
 	if err != nil {
-		util.PrintError("Failed to load modules: " + err.Error())
-		fmt.Println(err)
+		ansi.PrintError("[bivrost|main.go] Failed to load modules: " + err.Error())
 		return
 	}
 
@@ -133,26 +139,20 @@ func Execute(isPackage bool, buildVersion string) {
 			testDbConnection()
 			return
 		} else {
-			util.PrintError("Invalid test parameter. Exiting...")
+			ansi.PrintError("Invalid test parameter. Exiting...")
 			return
 		}
 	}
 
-	// Testing the proto connection
+	// Run the IPC goroutine
 	go unixDomainSockets()
 
 	// Connect to database
 	db, err := middleware.NewDBService().Connect(cfg.Database.Path)
 	if err != nil {
-		util.PrintError("Main function: " + err.Error())
+		ansi.PrintError("Main function: " + err.Error())
 		return
 	}
-
-	// As stated in the documentation:
-	// 	- It is rare to Close a DB, as the DB handle is meant to be long-lived and shared between many goroutines.
-	// However this is a defer statement, so it will be called when the function returns, which is the end of the main function.
-	// Meaning that the database will be closed when the application is closed.
-	defer db.Driver.Close()
 
 	port := 3300
 	if cfg.Network.Port != 0 {
@@ -163,24 +163,28 @@ func Execute(isPackage bool, buildVersion string) {
 	app := api.NewServer(cfg)
 	app.Listen(":" + strconv.Itoa(port))
 
-	util.PrintItalic("[main.go] Waiting for SIGINT or SIGTERM... Press Ctrl+C to exit.")
+	ansi.PrintItalic("[main.go] Waiting for SIGINT or SIGTERM... Press Ctrl+C to exit.")
 	<-sigChan
-	util.PrintItalic("[main.go] Exiting...")
+	ansi.PrintItalic("[main.go] Exiting...")
+	if err := db.Driver.Close(); err != nil {
+		ansi.PrintItalic("[+] db driver closed")
+		time.Sleep(time.Second * 3)
+	}
 }
 
 const dbPath = "users.db" // Testing purposes. This should be in the config file
 
 func testDbConnection() {
 	if fsutil.FileExists(dbPath) {
-		util.PrintWarning("Removing the existing database file...")
+		ansi.PrintWarning("Removing the existing database file...")
 		if err := os.Remove(dbPath); err != nil {
-			util.PrintError(err.Error())
+			ansi.PrintError(err.Error())
 			return
 		}
-		util.PrintSuccess("Database file removed.")
+		ansi.PrintSuccess("Database file removed.")
 	}
 
-	util.PrintInfo("Connecting to the database...")
+	ansi.PrintInfo("Connecting to the database...")
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		fmt.Println(err)
@@ -190,26 +194,21 @@ func testDbConnection() {
 	usersDb := middleware.InitDatabaseDriver(db)
 
 	if err := usersDb.Migrate(); err != nil {
-		util.PrintError(err.Error())
+		ansi.PrintError(err.Error())
 		return
 	}
 
-	util.PrintInfo("Testing db connection...")
+	ansi.PrintInfo("Testing db connection...")
 	err = db.Ping()
 	if err != nil {
-		util.PrintError(err.Error())
+		ansi.PrintError(err.Error())
 		return
 	}
-	util.PrintColorBold(util.LightGreen, "🎉 Database connected!")
+	ansi.PrintColorBold(ansi.LightGreen, "🎉 Database connected!")
 }
 
-// Standard port: 50051
-// func testProtoConnection() {
-// 	connector.InitProtobuf(50051)
-// }
-
 func unixDomainSockets() {
-	util.PrintInfo("Testing UNIX domain socket connection...")
+	ansi.PrintInfo("Testing UNIX domain socket connection...")
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
@@ -222,7 +221,7 @@ func unixDomainSockets() {
 	// Listen for connections
 	go ipcServer.Listen()
 
-	util.PrintItalic("Waiting for SIGINT or SIGTERM... Press Ctrl+C to exit.")
+	ansi.PrintItalic("Waiting for SIGINT or SIGTERM... Press Ctrl+C to exit.")
 	<-c
 
 	ipcServer.CloseConn()
@@ -231,7 +230,7 @@ func unixDomainSockets() {
 }
 
 func logalyzer(data chan string, lineChan chan string, log string, nginxLogStore *database.DataStore[models.NginxLog]) {
-	util.PrintInfo("Starting the file watcher...")
+	ansi.PrintInfo("Starting the file watcher...")
 	var wg sync.WaitGroup
 
 	go fswatcher.Watch(log, data)
@@ -241,85 +240,37 @@ func logalyzer(data chan string, lineChan chan string, log string, nginxLogStore
 	// Parses from data and inserts the parsed logs into the logChan
 	go database.ParseBufferedNginxLog(data, logChan)
 
-	// Inserts 100 logs from logChan at a time
+	// Inserts n logs (200 for now) logs from logChan at a time
 	go nginxLogWorker(nginxLogStore, logChan, &wg)
 
 	for line := range data {
-		// util.PrintInfo("Received line: " + line)
+		// ansi.PrintInfo("Received line: " + line)
 		lineChan <- line
 	}
 
 	defer func() {
-		// wg.Wait()
 		close(lineChan)
 		close(logChan)
-		util.PrintSuccess("logalyzer cleaned channels")
+		ansi.PrintSuccess("logalyzer cleaned channels")
 	}()
-
-	// go func() {
-	// 	for {
-	// 		select {
-	// 		case line := <-data:
-	// 			util.PrintInfo("Received line: " + line)
-	// 			lineChan <- line
-
-	// 			modelsChan := make(chan models.NginxLog, len(data))
-	// 			go database.ParseBufferedNginxLog(lineChan, modelsChan)
-	// 			nginxLogWorker(nginxLogStore, lineChan, modelsChan)
-
-	// 		}
-	// 	}
-	// }()
 }
 
 // nginxLogWorker is a worker function that processes the parsed logs and inserts them into the database.
 func nginxLogWorker(nginxLogStore *database.DataStore[models.NginxLog], logChan <-chan models.NginxLog, wg *sync.WaitGroup) {
 	timestamp := util.UnixNanoTimestamp()
 	var finalTime int64
-	util.PrintBold("Processing parsed logs for storage...")
-	if err := nginxLogStore.InsertBulk(logChan, 10); err != nil {
-		util.PrintError("Failed to insert logs: " + err.Error())
+	ansi.PrintBold("Processing parsed logs for storage...")
+	if err := nginxLogStore.InsertBulk(logChan, 100); err != nil {
+		ansi.PrintError("Failed to insert logs: " + err.Error())
 	} else {
-		util.PrintSuccess("Logs inserted successfully.")
+		ansi.PrintSuccess("Logs inserted successfully.")
 	}
-
-	// util.PrintBold("Processing parsed logs for storage...")
-	// if err := nginxLogStore.InsertBulk(logChan, 100); err != nil {
-	// 	util.PrintError("Failed to insert logs: " + err.Error())
-	// } else {
-	// 	util.PrintSuccess("Logs inserted successfully.")
-	// }
-
-	// for log := range logChan {
-	// 	util.PrintInfo("Processing parsed log for storage")
-	// 	if err := nginxLogStore.InsertLog(log); err != nil {
-	// 		util.PrintError("Failed to insert log: " + err.Error())
-	// 	}
-	// }
-	// go func() {
-	// 	for {
-	// 		select {
-	// 		case log := <-lineChan:
-	// 			util.PrintInfo("Received log: " + log)
-	// 			parsedLog, err := database.ParseNginxLog(log)
-	// 			if err != nil {
-	// 				util.PrintError("Failed to parse log: " + log)
-	// 				continue
-	// 			}
-
-	// 			nginxLogStore.InsertLog(parsedLog)
-	// 		}
-	// 		// close(logChan)
-	// 	}
-	// }()
-	// util.PrintInfo("Waiting for the inserts to complete...")
-	// close(logChan)
 
 	finalTime = util.UnixNanoTimestamp()
 	elapsed := finalTime - timestamp
-	util.PrintSuccess("Created and inserted the logs in")
-	util.PrintSuccess(fmt.Sprintf(" > %d µsec", elapsed/1000))
-	util.PrintSuccess(fmt.Sprintf(" > %d msec", elapsed/1000000))
-	util.PrintSuccess(fmt.Sprintf(" > %d sec", elapsed/1000000000))
-	util.PrintSuccess(fmt.Sprintf(" > %d min", elapsed/1000000000/60))
+	ansi.PrintSuccess("Created and inserted the logs in")
+	ansi.PrintSuccess(fmt.Sprintf(" > %d µsec", elapsed/1000))
+	ansi.PrintSuccess(fmt.Sprintf(" > %d msec", elapsed/1000000))
+	ansi.PrintSuccess(fmt.Sprintf(" > %d sec", elapsed/1000000000))
+	ansi.PrintSuccess(fmt.Sprintf(" > %d min", elapsed/1000000000/60))
 }

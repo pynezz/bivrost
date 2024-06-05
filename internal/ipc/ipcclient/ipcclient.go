@@ -14,10 +14,12 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/pynezz/bivrost/internal/fsutil"
 	"github.com/pynezz/bivrost/internal/ipc"
-	"github.com/pynezz/bivrost/internal/util"
 	"github.com/pynezz/bivrost/modules"
+
+	util "github.com/pynezz/pynezzentials"
+	"github.com/pynezz/pynezzentials/ansi"
+	"github.com/pynezz/pynezzentials/fsutil"
 
 	pclient "github.com/pynezz/pynezzentials/ipc/ipcclient"
 )
@@ -33,7 +35,7 @@ type IPCClient struct {
 }
 
 func countDown(secLeft int) { // i--
-	util.PrintInfo(util.Overwrite + strconv.Itoa(secLeft) + " seconds left" + util.Backspace)
+	ansi.PrintInfo(ansi.Overwrite + strconv.Itoa(secLeft) + " seconds left" + ansi.Backspace)
 	time.Sleep(time.Second)
 	if secLeft > 0 {
 		countDown(secLeft - 1)
@@ -42,8 +44,8 @@ func countDown(secLeft int) { // i--
 
 func socketExists(socketPath string) bool {
 	if !fsutil.FileExists(socketPath) {
-		util.PrintError("The UNIX domain socket does not exist")
-		util.PrintInfo("Retrying in 5 seconds...")
+		ansi.PrintError("The UNIX domain socket does not exist")
+		ansi.PrintInfo("Retrying in 5 seconds...")
 		countDown(5)
 		return false
 	}
@@ -69,15 +71,15 @@ func (c *IPCClient) SetDescf(desc string, args ...interface{}) {
 
 func (c *IPCClient) Stringify() string {
 	if c.Name == "" {
-		util.PrintWarning("No name set for IPCClient")
+		ansi.PrintWarning("No name set for IPCClient")
 		c.Name = "IPCClient"
 	}
 	if c.Desc == "" {
-		util.PrintWarning("No description set for IPCClient")
+		ansi.PrintWarning("No description set for IPCClient")
 		c.Desc = "IPC testing client"
 	}
 	if c.Identifier == [4]byte{} { // If the identifier is not set (ie. [0, 0, 0, 0])
-		util.PrintWarning("No identifier set for IPCClient")
+		ansi.PrintWarning("No identifier set for IPCClient")
 		c.Identifier = ipc.IDENTIFIERS["module"]
 	}
 
@@ -87,14 +89,14 @@ func (c *IPCClient) Stringify() string {
 	stringified += fmt.Sprintf("Description: %s\n", c.Desc)
 	stringified += fmt.Sprintf("Identifier:  %s\n", c.Identifier)
 
-	return util.FormatRoundedBox(stringified)
+	return ansi.FormatRoundedBox(stringified)
 }
 
 // returns a bool (retry) and an error
 func existHandler(exist bool) (bool, error) {
 	if !exist {
-		util.PrintError("socket (" + DefaultSocketPath() + ") not found")
-		util.PrintColorUnderline(util.DarkYellow, "Retry? [Y/n]")
+		ansi.PrintError("socket (" + DefaultSocketPath() + ") not found")
+		ansi.PrintColorUnderline(ansi.DarkYellow, "Retry? [Y/n]")
 		var response string
 		fmt.Scanln(&response)
 		if response[0] == 'n' {
@@ -113,7 +115,7 @@ func (c *IPCClient) ClientListen() ipc.IPCResponse {
 	response := ipc.IPCResponse{}
 
 	if c.conn == nil {
-		util.PrintError("Connection not established")
+		ansi.PrintError("Connection not established")
 		return response
 	}
 
@@ -121,10 +123,10 @@ func (c *IPCClient) ClientListen() ipc.IPCResponse {
 	if err != nil {
 		response.Success = false
 		if err.Error() == "EOF" {
-			util.PrintWarning("Client disconnected")
+			ansi.PrintWarning("Client disconnected")
 			return response
 		}
-		util.PrintError("Error parsing the connection")
+		ansi.PrintError("Error parsing the connection")
 		return response
 	}
 
@@ -135,13 +137,13 @@ func (c *IPCClient) ClientListen() ipc.IPCResponse {
 		Checksum32: res.Checksum32,
 	}
 
-	util.PrintSuccess("Received message from server: " + response.Message)
+	ansi.PrintSuccess("Received message from server: " + response.Message)
 
 	if string(res.Message.Data) == "OK" {
-		util.PrintColorf(util.LightCyan, "Message type: %v\n", res.Header.MessageType)
-		util.PrintSuccess("Checksums match")
+		ansi.PrintColorf(ansi.LightCyan, "Message type: %v\n", res.Header.MessageType)
+		ansi.PrintSuccess("Checksums match")
 	} else {
-		util.PrintError("Checksums do not match")
+		ansi.PrintError("Checksums do not match")
 	}
 
 	return response
@@ -197,10 +199,10 @@ func (c *IPCClient) Connect(module string) error {
 	c.conn = conn
 	c.Identifier = ipc.IDENTIFIERS["threat_intel"] // Should equal to 0x54, 0x48, 0x52, 0x49,
 
-	util.PrintColorAndBg(util.BgGray, util.BgCyan, "Connected to "+c.Sock)
+	ansi.PrintColorAndBg(ansi.BgGray, ansi.BgCyan, "Connected to "+c.Sock)
 
 	// Print box with client info
-	util.PrintColor(util.Cyan, c.Stringify())
+	ansi.PrintColor(ansi.Cyan, c.Stringify())
 
 	return nil
 }
@@ -208,7 +210,7 @@ func (c *IPCClient) Connect(module string) error {
 // userRetry asks the user if they want to retry connecting to the IPC server.
 func userRetry() bool {
 	fmt.Println("IPCClient not connected\nDid you forget to call Connect()?")
-	util.PrintWarning("Do you want to retry? [Y/n]")
+	ansi.PrintWarning("Do you want to retry? [Y/n]")
 
 	var retry string
 	fmt.Scanln(&retry)
@@ -219,25 +221,25 @@ func (c *IPCClient) AwaitResponse() error {
 	var err error
 
 	if c.conn == nil {
-		util.PrintError("Connection not established")
+		ansi.PrintError("Connection not established")
 	}
 
 	req, err := parseConnection(c.conn)
 	if err != nil {
 		if err.Error() == "EOF" {
-			util.PrintWarning("Client disconnected")
+			ansi.PrintWarning("Client disconnected")
 			return err
 		}
-		util.PrintError("Error parsing the connection")
+		ansi.PrintError("Error parsing the connection")
 		return err
 	}
-	util.PrintSuccess("Received response from server: " + req.Message.StringData)
+	ansi.PrintSuccess("Received response from server: " + req.Message.StringData)
 
 	if string(req.Message.Data) == "OK" {
-		util.PrintColorf(util.LightCyan, "Message type: %v\n", req.Header.MessageType)
-		util.PrintSuccess("Checksums match")
+		ansi.PrintColorf(ansi.LightCyan, "Message type: %v\n", req.Header.MessageType)
+		ansi.PrintSuccess("Checksums match")
 	} else {
-		util.PrintError("Checksums do not match")
+		ansi.PrintError("Checksums do not match")
 		return fmt.Errorf("checksums do not match")
 	}
 
@@ -261,18 +263,18 @@ func (c *IPCClient) SendIPCMessage(msg *ipc.IPCRequest) error {
 		}
 	}
 
-	util.PrintItalic("Sending encoded message to server...")
+	ansi.PrintItalic("Sending encoded message to server...")
 	_, err = c.conn.Write(bBuffer.Bytes())
 	if err != nil {
 		fmt.Println("Write error:", err)
 		return err
 	}
-	util.PrintSuccess("Message sent: " + msg.Message.StringData)
+	ansi.PrintSuccess("Message sent: " + msg.Message.StringData)
 
-	util.PrintDebug("Awaiting response...")
+	ansi.PrintDebug("Awaiting response...")
 	err = c.AwaitResponse()
 	if err != nil {
-		util.PrintError("Error receiving response from server")
+		ansi.PrintError("Error receiving response from server")
 		fmt.Println(err)
 		return err
 	}
@@ -283,7 +285,7 @@ func (c *IPCClient) SendIPCMessage(msg *ipc.IPCRequest) error {
 // NewMessage creates a new IPC message.
 func (c *IPCClient) CreateReq(message string, t ipc.MsgType, dataType ipc.DataType) *ipc.IPCRequest {
 	checksum := crc32.ChecksumIEEE([]byte(message))
-	util.PrintDebug("Created IPC checksum: " + strconv.Itoa(int(checksum)))
+	ansi.PrintDebug("Created IPC checksum: " + strconv.Itoa(int(checksum)))
 
 	return &ipc.IPCRequest{
 		MessageSignature: ipc.IPCID, // IPC Server ID
@@ -302,7 +304,7 @@ func (c *IPCClient) CreateReq(message string, t ipc.MsgType, dataType ipc.DataTy
 }
 
 func (c *IPCClient) CreateGenericReq(message interface{}, t ipc.MsgType, dataType ipc.DataType) *ipc.IPCRequest {
-	util.PrintDebug("[CLIENT] Creating a generic IPC request...")
+	ansi.PrintDebug("[CLIENT] Creating a generic IPC request...")
 	var data []byte
 	var err error
 
@@ -315,16 +317,16 @@ func (c *IPCClient) CreateGenericReq(message interface{}, t ipc.MsgType, dataTyp
 		data, err = json.Marshal(message)
 		if err != nil {
 			// Handle the error
-			util.PrintError("[CLIENT] Error marshaling JSON data:" + err.Error())
+			ansi.PrintError("[CLIENT] Error marshaling JSON data:" + err.Error())
 			return nil
 		}
-		util.PrintDebug("[CLIENT] Marshaling JSON data...")
+		ansi.PrintDebug("[CLIENT] Marshaling JSON data...")
 
 	case ipc.DATA_YAML:
 		fmt.Println("[CLIENT] Marshaling YAML data...")
 		data, err = yaml.Marshal(message)
 		if err != nil {
-			util.PrintError("[CLIENT] Error marshaling YAML data:" + err.Error())
+			ansi.PrintError("[CLIENT] Error marshaling YAML data:" + err.Error())
 			return nil
 		}
 	case ipc.DATA_BIN:
@@ -332,7 +334,7 @@ func (c *IPCClient) CreateGenericReq(message interface{}, t ipc.MsgType, dataTyp
 	}
 
 	checksum := crc32.ChecksumIEEE(data)
-	util.PrintDebug("[CLIENT] Created IPC checksum: " + strconv.Itoa(int(checksum)))
+	ansi.PrintDebug("[CLIENT] Created IPC checksum: " + strconv.Itoa(int(checksum)))
 
 	return &ipc.IPCRequest{
 		MessageSignature: ipc.IPCID,
@@ -355,25 +357,25 @@ func parseConnection(c net.Conn) (ipc.IPCRequest, error) {
 	var request ipc.IPCRequest
 	// var reqBuffer bytes.Buffer
 
-	util.PrintDebug("[CLIENT] Trying to decode the bytes to a request struct...")
-	util.PrintColorf(util.LightCyan, "[CLIENT] Decoding the bytes to a request struct... %v", c)
+	ansi.PrintDebug("[CLIENT] Trying to decode the bytes to a request struct...")
+	ansi.PrintColorf(ansi.LightCyan, "[CLIENT] Decoding the bytes to a request struct... %v", c)
 
 	decoder := gob.NewDecoder(c)
 	err := decoder.Decode(&request)
 	if err != nil {
 		if err.Error() == "EOF" {
-			util.PrintWarning("parseConnection: EOF error, connection closed")
+			ansi.PrintWarning("parseConnection: EOF error, connection closed")
 			return request, err
 		}
-		util.PrintWarning("parseConnection: Error decoding the request \n > " + err.Error())
+		ansi.PrintWarning("parseConnection: Error decoding the request \n > " + err.Error())
 		return request, err
 	}
 
-	util.PrintDebug("Trying to encode the bytes to a request struct...")
+	ansi.PrintDebug("Trying to encode the bytes to a request struct...")
 	fmt.Println(request.Stringify())
-	util.PrintDebug("--------------------")
+	ansi.PrintDebug("--------------------")
 
-	util.PrintSuccess("[ipcclient.go] Parsed the message signature!")
+	ansi.PrintSuccess("[ipcclient.go] Parsed the message signature!")
 	fmt.Printf("Message ID: %v\n", request.MessageSignature)
 
 	return request, nil

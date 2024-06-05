@@ -9,8 +9,9 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/pynezz/bivrost/internal/util"
-	"github.com/pynezz/bivrost/internal/util/cryptoutils"
+	util "github.com/pynezz/pynezzentials"
+	"github.com/pynezz/pynezzentials/ansi"
+	"github.com/pynezz/pynezzentials/cryptoutils"
 )
 
 // Claims defines the structure of the JWT claims.
@@ -79,7 +80,7 @@ type WebAuthnRegisterRequest struct {
 func Bouncer() fiber.Handler {
 	// cmds := scripttest.DefaultCmds()
 
-	util.PrintDebug("Bouncer middleware is running")
+	ansi.PrintDebug("Bouncer middleware is running")
 	return func(c *fiber.Ctx) error {
 		if c.Route().Path == "/" {
 			return c.SendStatus(200)
@@ -102,14 +103,14 @@ func Bouncer() fiber.Handler {
 		// Validate token
 		token, err := VerifyJWTToken(tokenString)
 		if err != nil || !token.Valid {
-			util.PrintError("[BOUNCER] error verifying token: " + err.Error())
+			ansi.PrintError("[BOUNCER] error verifying token: " + err.Error())
 			return c.Status(fiber.StatusUnauthorized).SendString("Unauthorized")
 		}
 
-		util.PrintColorAndBgBold(util.Green, util.Cyan, "[+] User is authenticated 🎉")
+		ansi.PrintColorAndBgBold(ansi.Green, ansi.Cyan, "[+] User is authenticated 🎉")
 
 		// Token is valid, proceed with the request
-		util.PrintDebug("Token is valid, proceeding with the request. Bouncer done.")
+		ansi.PrintDebug("Token is valid, proceeding with the request. Bouncer done.")
 		return c.Next()
 	}
 }
@@ -118,11 +119,11 @@ func Base64Decode(b string) string {
 	// Decode the base64 string
 	base64Decoded, err := base64.StdEncoding.DecodeString(b)
 	if err != nil {
-		util.PrintError("Error decoding base64 string: " + err.Error())
+		ansi.PrintError("Error decoding base64 string: " + err.Error())
 	}
 
 	// Print the decoded string
-	util.PrintSuccess("Base64 decoded: " + string(base64Decoded))
+	ansi.PrintSuccess("Base64 decoded: " + string(base64Decoded))
 	return string(base64Decoded)
 }
 
@@ -131,29 +132,29 @@ func BeginLogin(c *fiber.Ctx) error {
 
 	var loginReq LoginRequest
 	if err := c.BodyParser(&loginReq); err != nil {
-		util.PrintError("Error parsing login request: " + err.Error())
+		ansi.PrintError("Error parsing login request: " + err.Error())
 		return c.Status(fiber.StatusBadRequest).SendString("Invalid request")
 	}
 
-	util.PrintDebug("Got a POST request to /login")
+	ansi.PrintDebug("Got a POST request to /login")
 	username := loginReq.Username
 	if username == "" {
 		return c.Status(fiber.StatusBadRequest).SendString("Invalid request")
 	}
 
-	util.PrintSuccess("Username: " + username)
+	ansi.PrintSuccess("Username: " + username)
 
 	// If the base64 field is non-empty, we want to parse it:
 	if loginReq.Base64 != "" {
 		// Decode the base64 string
 		base64Decoded, err := base64.StdEncoding.DecodeString(loginReq.Base64)
 		if err != nil {
-			util.PrintError("Error decoding base64 string: " + err.Error())
+			ansi.PrintError("Error decoding base64 string: " + err.Error())
 			return c.Status(fiber.StatusBadRequest).SendString("Invalid request")
 		}
 
 		// Print the decoded string
-		util.PrintSuccess("Base64 decoded: " + string(base64Decoded))
+		ansi.PrintSuccess("Base64 decoded: " + string(base64Decoded))
 	}
 
 	user := GetUserByDisplayName(username)
@@ -163,20 +164,20 @@ func BeginLogin(c *fiber.Ctx) error {
 
 	pwAuth, err := GetPasswordHash(user.UserID)
 	if err != nil {
-		util.PrintError("Error getting password hash: " + err.Error())
+		ansi.PrintError("Error getting password hash: " + err.Error())
 		return c.Status(fiber.StatusInternalServerError).SendString("Internal server error")
 	}
 
 	if pwAuth.PasswordHash == "" {
-		util.PrintError("No password hash found for user: " + username)
+		ansi.PrintError("No password hash found for user: " + username)
 		return c.Status(fiber.StatusUnauthorized).SendString("Invalid credentials")
 	}
 
-	util.PrintDebug("Found encoded hash: " + pwAuth.PasswordHash)
+	ansi.PrintDebug("Found encoded hash: " + pwAuth.PasswordHash)
 
 	match, err := ComparePasswordAndHash(loginReq.Password, pwAuth.PasswordHash)
 	if err != nil {
-		util.PrintError("Error comparing password and hash: " + err.Error())
+		ansi.PrintError("Error comparing password and hash: " + err.Error())
 		return c.Status(fiber.StatusInternalServerError).SendString("Internal server error")
 	}
 	if !match {
@@ -191,12 +192,12 @@ func BeginLogin(c *fiber.Ctx) error {
 
 	// Now I want to set the JWT token in the Authorization header for the client
 	// Generate a JWT token
-	util.PrintDebug("Generating JWT token for user: " + username)
+	ansi.PrintDebug("Generating JWT token for user: " + username)
 	token := GenerateJWTToken(user, time.Now())
 	c.WriteString(token)
 
 	if FinishLogin(user) != nil {
-		util.PrintError("Error finishing login")
+		ansi.PrintError("Error finishing login")
 		return c.Status(fiber.StatusInternalServerError).SendString("Internal server error")
 	}
 
@@ -213,13 +214,13 @@ func BeginLogin(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(LoginSucessJSON(user, token))
 
 	// c.App().Post("/login", func(lctx *fiber.Ctx) error {
-	// 	util.PrintDebug("Got a POST request to /login")
+	// 	ansi.PrintDebug("Got a POST request to /login")
 	// 	username := lctx.Params("username")
 	// 	if username == "" {
 	// 		return lctx.SendStatus(fiber.StatusBadRequest)
 	// 	}
 
-	// 	util.PrintSuccess("Username: " + username)
+	// 	ansi.PrintSuccess("Username: " + username)
 	// 	return c.Next()
 	// })
 
@@ -243,15 +244,15 @@ func BeginLogin(c *fiber.Ctx) error {
 // TODO: Implement the finish login process
 func FinishLogin(u User) error {
 	// Update the user's last login time
-	util.PrintDebug("Finishing login for user: " + u.DisplayName)
+	ansi.PrintDebug("Finishing login for user: " + u.DisplayName)
 	result, err := UpdateLastLoginTime(u.UserID)
 	if err != nil {
-		util.PrintError("Error updating last login time: " + err.Error())
+		ansi.PrintError("Error updating last login time: " + err.Error())
 		return err
 	}
-	util.PrintDebug("Done updating last login time")
+	ansi.PrintDebug("Done updating last login time")
 	affectedRows, _ := result.RowsAffected()
-	util.PrintDebug("Affected rows: " + strconv.FormatInt(affectedRows, 10))
+	ansi.PrintDebug("Affected rows: " + strconv.FormatInt(affectedRows, 10))
 
 	return nil
 }
@@ -260,17 +261,17 @@ func FinishLogin(u User) error {
 func BeginRegistration(c *fiber.Ctx) error {
 	var regReq PasswordRegisterRequest
 	if err := c.BodyParser(&regReq); err != nil {
-		util.PrintError("Error parsing registration request: " + err.Error())
+		ansi.PrintError("Error parsing registration request: " + err.Error())
 		return c.Status(fiber.StatusBadRequest).SendString("Invalid request")
 	}
 
-	util.PrintDebug("Got a POST request to /register")
+	ansi.PrintDebug("Got a POST request to /register")
 	username := regReq.Username
 	if username == "" {
 		return c.Status(fiber.StatusBadRequest).SendString("Invalid request")
 	}
 
-	util.PrintSuccess("Username: " + username)
+	ansi.PrintSuccess("Username: " + username)
 
 	// os.cms
 
@@ -281,9 +282,9 @@ func BeginRegistration(c *fiber.Ctx) error {
 	// Generate a cryptographically secure random 32-bit integer
 	var randomID uint64
 	randomID, err := cryptoutils.GenerateRandomInt(1000000, 10000000) // I know I shouldn't have hardcoded these...
-	util.PrintDebug("Generated random ID: " + strconv.Itoa(int(randomID)) + " for user " + username)
+	ansi.PrintDebug("Generated random ID: " + strconv.Itoa(int(randomID)) + " for user " + username)
 	if err != nil {
-		util.PrintError(err.Error())
+		ansi.PrintError(err.Error())
 	}
 
 	today := time.Now()
@@ -302,7 +303,7 @@ func BeginRegistration(c *fiber.Ctx) error {
 	// and the session id
 	// sessionId := time.Now() * time.Nanosecond + strconv.FormatUint(userId, 10)
 	sessionId := util.UserSessionIdValue(randomID, today)
-	util.PrintDebug("Generated session ID: " + sessionId)
+	ansi.PrintDebug("Generated session ID: " + sessionId)
 
 	// Creating the user to insert into the database
 	u := User{
@@ -333,10 +334,10 @@ func BeginRegistration(c *fiber.Ctx) error {
 		u.FirstName, u.ProfileImageUrl,
 		u.SessionId, u.AuthMethodID)
 	if err != nil {
-		util.PrintError(err.Error())
+		ansi.PrintError(err.Error())
 	}
 	rowsAffected, _ := result.RowsAffected()
-	util.PrintDebug("Affected rows: " + strconv.FormatInt(rowsAffected, 10)) // Get the affected amount of rows
+	ansi.PrintDebug("Affected rows: " + strconv.FormatInt(rowsAffected, 10)) // Get the affected amount of rows
 
 	// Insert password hash into the password_auth table
 
@@ -350,33 +351,33 @@ func BeginRegistration(c *fiber.Ctx) error {
 
 	_, encodedHash, err := generateFromPassword(regReq.Password, p)
 	if err != nil {
-		util.PrintError("Error generating password hash: " + err.Error())
+		ansi.PrintError("Error generating password hash: " + err.Error())
 		return c.Status(fiber.StatusInternalServerError).SendString("Internal server error")
 	}
 
-	util.PrintSuccess("Generated encoded hash: " + encodedHash)
+	ansi.PrintSuccess("Generated encoded hash: " + encodedHash)
 
 	// Insert the password hash into the password_auth table
 	result, err = db.Write(`INSERT INTO password_auth (UserID, Enabled, PasswordHash) VALUES (?, ?, ?)`,
 		u.UserID, true, encodedHash)
 	if err != nil {
-		util.PrintError("Error inserting password hash into the database: " + err.Error())
+		ansi.PrintError("Error inserting password hash into the database: " + err.Error())
 		return c.Status(fiber.StatusInternalServerError).SendString("Internal server error")
 	}
 
 	rowsAffected, _ = result.RowsAffected()
-	util.PrintDebug("Affected rows: " + strconv.FormatInt(rowsAffected, 10))
+	ansi.PrintDebug("Affected rows: " + strconv.FormatInt(rowsAffected, 10))
 
 	// Generate a JWT token
 	token := GenerateJWTToken(u, today)
 
 	if _, err := VerifyJWTToken(token); err != nil {
-		util.PrintError("Error verifying token: " + err.Error())
+		ansi.PrintError("Error verifying token: " + err.Error())
 		return c.Status(fiber.StatusInternalServerError).SendString("Internal server error")
 	}
 
 	if FinishRegistration(u) != nil {
-		util.PrintError("Error finishing registration")
+		ansi.PrintError("Error finishing registration")
 		return c.Status(fiber.StatusInternalServerError).SendString("Internal server error")
 	}
 
@@ -390,7 +391,7 @@ func BeginRegistration(c *fiber.Ctx) error {
 
 // TODO: Implement the finish registration process
 func FinishRegistration(user User) error {
-	util.PrintDebug("Finishing registration for user: " + user.DisplayName)
+	ansi.PrintDebug("Finishing registration for user: " + user.DisplayName)
 
 	return nil
 }
